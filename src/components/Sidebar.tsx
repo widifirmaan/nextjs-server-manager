@@ -75,11 +75,11 @@ export default function Sidebar() {
                     <h1 className="text-xl neon-text font-bold desktop-only" style={{ letterSpacing: '1px' }}>
                         SERVER<span style={{ color: 'var(--primary)' }}>MGR</span>
                     </h1>
-                    <p className="text-sm text-muted mt-1 desktop-only">v1.0.0 Alpha</p>
+                    <p className="text-sm text-muted mt-1 desktop-only">v1.0.0 Alpha by <a href="https://widifirmaan.web.id">W</a></p>
 
                     {/* Mobile version of title inside sidebar (optional, but good for context) */}
                     <div className="md:hidden">
-                        <p className="text-sm text-muted">Navigation</p>
+                        <p className="text-sm text-muted"></p>
                     </div>
                 </div>
 
@@ -106,7 +106,7 @@ export default function Sidebar() {
                 </nav>
 
                 <div className="mt-auto p-4 glass-panel text-xs text-muted flex items-center justify-between">
-                    <span>Status</span>
+                    <span>Server Status</span>
                     <span className="badge badge-success">ONLINE</span>
                 </div>
             </motion.aside>
