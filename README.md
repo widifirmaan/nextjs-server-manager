@@ -125,4 +125,4 @@ This application provides root-level access (via terminal and docker controls) t
 
 ## License
 
-[MIT](LICENSE)
+[FREE AS F00CK](LICENSE)
