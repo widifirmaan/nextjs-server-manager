@@ -2,7 +2,7 @@
 
 A modern, responsive, and secure web-based server management dashboard built with Next.js. Monitor system resources, manage Docker containers, control Cloudflare Tunnels, and access a web-based terminal—all from a single, beautiful interface.
 
-![Dashboard Overview](dashboard_overview_1767944717250.png)
+![Dashboard Overview](screenshots/dashboard.png)
 
 ## Features
 
@@ -21,23 +21,23 @@ A modern, responsive, and secure web-based server management dashboard built wit
 
 ### 🖥️ Dashboard
 Get a quick overview of your server's health.
-![Dashboard](dashboard_overview_1767944717250.png)
+![Dashboard](screenshots/dashboard.png)
 
 ### 🐳 Docker Management
 Easily manage your containers.
-![Docker](docker_management_1767944737772.png)
+![Docker](screenshots/docker.png)
 
 ### 🌐 Cloudflare Tunnels
 Monitor your tunnel connections.
-![Tunnels](tunnels_page_1767944775601.png)
+![Tunnels](screenshots/tunnels.png)
 
 ### ⌨️ Web Terminal
 Direct ssh-like access from your browser.
-![Terminal](terminal_page_1767944834697.png)
+![Terminal](screenshots/terminal.png)
 
 ### 📱 Mobile View
 Fully responsive interface for management on the go.
-![Mobile Sidebar](mobile_sidebar_open_1767944894291.png)
+![Mobile Sidebar](screenshots/mobile.png)
 
 ## Technology Stack
 
