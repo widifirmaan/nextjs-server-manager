@@ -41,7 +41,10 @@ export async function POST(req: Request) {
                 const status = await git.status();
                 const branch = status.current;
                 // Reset hard to origin/branch_name
-                result = await git.reset(['--hard', `origin/${branch}`]);
+                await git.reset(['--hard', `origin/${branch}`]);
+                // ALSO clean untracked files/directories (-fd)
+                await git.clean('f', ['-d']);
+                result = { message: 'Hard Reset & Cleaned untracked files' };
                 break;
             case 'docker-rebuild':
                 // We assume compose for "Rebuild Docker" usually means restarting the stack
