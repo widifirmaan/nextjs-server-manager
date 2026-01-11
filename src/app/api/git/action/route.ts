@@ -30,6 +30,14 @@ export async function POST(req: Request) {
             case 'status':
                 result = await git.status();
                 break;
+            case 'force-pull':
+                await git.fetch();
+                // Get default branch name (usually main or master)
+                const status = await git.status();
+                const branch = status.current;
+                // Reset hard to origin/branch_name
+                result = await git.reset(['--hard', `origin/${branch}`]);
+                break;
             default:
                 return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }

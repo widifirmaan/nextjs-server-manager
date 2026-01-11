@@ -66,6 +66,8 @@ export default function GitPage() {
                     alert('Pull successful');
                 } else if (action === 'fetch') {
                     alert('Fetch successful');
+                } else if (action === 'force-pull') {
+                    alert('Force Pull (Hard Reset) successful');
                 }
                 fetchProjects();
             }
@@ -185,6 +187,7 @@ export default function GitPage() {
                                         className="btn btn-primary"
                                         onClick={() => handleAction(p.path, 'pull')}
                                         disabled={!!processing || !!p.error}
+                                        title="Pull (Fast Forward)"
                                     >
                                         {processing === `${p.path}-pull` ? (
                                             <Loader2 size={16} className="animate-spin mr-2" />
@@ -194,10 +197,26 @@ export default function GitPage() {
                                         Pull
                                     </button>
                                     <button
+                                        className="btn btn-danger"
+                                        onClick={() => {
+                                            if (confirm('Force Pull will RESET all local changes and overwrite them with the remote version. Are you sure?')) {
+                                                handleAction(p.path, 'force-pull');
+                                            }
+                                        }}
+                                        disabled={!!processing || !!p.error}
+                                        title="Hard Reset to Origin"
+                                    >
+                                        {processing === `${p.path}-force-pull` ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <AlertTriangle size={16} />
+                                        )}
+                                    </button>
+                                    <button
                                         className="btn btn-ghost"
                                         onClick={() => handleAction(p.path, 'fetch')}
                                         disabled={!!processing || !!p.error}
-                                        title="Fetch"
+                                        title="Fetch Status"
                                     >
                                         <RefreshCw size={16} className={clsx(processing === `${p.path}-fetch` && "animate-spin")} />
                                     </button>
