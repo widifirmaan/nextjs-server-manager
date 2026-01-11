@@ -64,6 +64,8 @@ export default function GitPage() {
             } else {
                 if (action === 'pull') {
                     alert('Pull successful');
+                } else if (action === 'fetch') {
+                    alert('Fetch successful');
                 }
                 fetchProjects();
             }
@@ -71,6 +73,30 @@ export default function GitPage() {
             alert('Failed to execute command');
         } finally {
             setProcessing(null);
+        }
+    };
+
+    const handleFetchAll = async () => {
+        if (!confirm('Fetch all projects? This might take a while.')) return;
+        setLoading(true); // Re-use loading state to block UI
+
+        try {
+            // We'll just sequentially fetch all for now to keep it simple without new API
+            // Or better, let's just do it client side for simplicity given the current setup
+            const promises = projects.map(p =>
+                fetch('/api/git/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectPath: p.path, action: 'fetch' }),
+                })
+            );
+
+            await Promise.all(promises);
+            alert('All projects fetched');
+            fetchProjects();
+        } catch (e) {
+            alert('Failed to fetch all projects');
+            setLoading(false);
         }
     };
 
@@ -82,13 +108,24 @@ export default function GitPage() {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold neon-text">Git Projects</h1>
-                <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={fetchProjects}
-                    disabled={loading}
-                >
-                    <RefreshCw size={18} className={clsx(loading && "animate-spin")} />
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleFetchAll}
+                        disabled={loading || projects.length === 0}
+                    >
+                        <RefreshCw size={18} className={clsx(loading && "animate-spin mr-2", !loading && "mr-2")} />
+                        Fetch All
+                    </button>
+                    <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={fetchProjects}
+                        disabled={loading}
+                        title="Refresh List"
+                    >
+                        <RefreshCw size={18} className={clsx(loading && "animate-spin")} />
+                    </button>
+                </div>
             </div>
 
             {error && (
