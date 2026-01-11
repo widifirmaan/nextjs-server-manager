@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X, Box, Coffee } from 'lucide-react';
+import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X, Box, Coffee, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 // import { toast } from 'sonner';
 
@@ -387,6 +387,22 @@ export default function GitPage() {
                                         title="Fetch Status"
                                     >
                                         <RefreshCw size={16} className={clsx(processing === `${p.path}-fetch` && "animate-spin")} />
+                                    </button>
+                                    <button
+                                        className="btn btn-error btn-outline"
+                                        onClick={() => {
+                                            if (confirm('DANGER: Are you sure you want to DELETE this repository permanently? This cannot be undone.')) {
+                                                handleAction(p.path, 'delete');
+                                            }
+                                        }}
+                                        disabled={!!processing}
+                                        title="Delete Repository"
+                                    >
+                                        {processing === `${p.path}-delete` ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <Trash2 size={16} />
+                                        )}
                                     </button>
                                 </div>
                             </div>

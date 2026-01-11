@@ -37,14 +37,29 @@ export async function POST(req: Request) {
 
             case 'force-pull':
                 await git.fetch();
-                // Get default branch name (usually main or master)
                 const status = await git.status();
-                const branch = status.current;
-                // Reset hard to origin/branch_name
-                await git.reset(['--hard', `origin/${branch}`]);
-                // ALSO clean untracked files/directories (-fd)
-                await git.clean('f', ['-d']);
-                result = { message: 'Hard Reset & Cleaned untracked files' };
+                const currentBranch = status.current;
+
+                let resetTarget = '';
+                try {
+                    // Try to get configured upstream (e.g. origin/main)
+                    resetTarget = (await git.revparse(['--abbrev-ref', '@{u}'])).trim();
+                } catch (e) {
+                    // No upstream configured. Try guessing origin/<branch>
+                    resetTarget = `origin/${currentBranch}`;
+                }
+
+                try {
+                    await git.reset(['--hard', resetTarget]);
+                    // ALSO clean untracked files/directories (-fd)
+                    await git.clean('f', ['-d']);
+                    result = { message: `Hard Reset to ${resetTarget} successful` };
+                } catch (e: any) {
+                    if (e.message.includes('ambiguous argument') || e.message.includes('unknown revision')) {
+                        throw new Error(`Remote branch '${resetTarget}' does not exist. Cannot force pull local-only branch.`);
+                    }
+                    throw e;
+                }
                 break;
             case 'docker-rebuild':
                 // We assume compose for "Rebuild Docker" usually means restarting the stack
@@ -80,6 +95,11 @@ export async function POST(req: Request) {
                 } catch (e: any) {
                     throw new Error(`Spring Boot build failed: ${e.message}`);
                 }
+                break;
+            case 'delete':
+                // Double safety check is already done at top of function
+                await fs.rm(projectPath, { recursive: true, force: true });
+                result = { message: 'Repository deleted successfully' };
                 break;
             default:
                 return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import {
     Folder, File, FileText, MoreVertical, Trash, Edit, Save,
     Move, ChevronRight, Home, ArrowUp, Plus, RefreshCw,
-    Loader2, AlertTriangle, X, Check, Code
+    Loader2, AlertTriangle, X, Check, Code, Scissors, Copy, Clipboard, FilePenLine
 } from 'lucide-react';
 import clsx from 'clsx';
 // import { toast } from 'sonner';
@@ -32,6 +32,9 @@ export default function FileManagerPage() {
     const [modalOpen, setModalOpen] = useState<'create-folder' | 'create-file' | 'rename' | null>(null);
     const [modalInput, setModalInput] = useState('');
     const [activeItem, setActiveItem] = useState<FileEntry | null>(null);
+
+    // Clipboard State
+    const [clipboard, setClipboard] = useState<{ path: string, op: 'copy' | 'move' } | null>(null);
 
     const fetchFiles = async (path: string) => {
         setLoading(true);
@@ -150,6 +153,22 @@ export default function FileManagerPage() {
         }
     };
 
+    const handlePaste = async () => {
+        if (!clipboard) return;
+        const fileName = clipboard.path.split('/').pop();
+        if (!fileName) return;
+
+        const targetPath = currentPath.endsWith('/')
+            ? currentPath + fileName
+            : currentPath + '/' + fileName;
+
+        const success = await performAction(clipboard.op, clipboard.path, targetPath);
+        if (success) {
+            if (clipboard.op === 'move') setClipboard(null);
+            alert('Paste successful');
+        }
+    };
+
     const handleModalSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!modalInput) return;
@@ -206,6 +225,15 @@ export default function FileManagerPage() {
                 </div>
 
                 <div className="flex gap-2">
+                    {clipboard && (
+                        <button
+                            className="btn btn-warning btn-sm animate-pulse"
+                            onClick={handlePaste}
+                            title={`Paste ${clipboard.op}: ${clipboard.path.split('/').pop()}`}
+                        >
+                            <Clipboard size={16} className="mr-2" /> Paste
+                        </button>
+                    )}
                     <button
                         className="btn btn-primary btn-sm"
                         onClick={() => { setModalOpen('create-file'); setModalInput(''); }}
@@ -270,10 +298,20 @@ export default function FileManagerPage() {
                                             {file.isDirectory ? '-' : formatSize(file.size)}
                                         </span>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {!file.isDirectory && (
+                                                <button
+                                                    className="btn btn-ghost btn-xs btn-square"
+                                                    title="Edit Content"
+                                                    onClick={(e) => { e.stopPropagation(); openEditor(file); }}
+                                                >
+                                                    <FilePenLine size={14} />
+                                                </button>
+                                            )}
                                             <button
                                                 className="btn btn-ghost btn-xs btn-square"
                                                 title="Rename"
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
                                                     setActiveItem(file);
                                                     setModalInput(file.name);
                                                     setModalOpen('rename');
@@ -282,9 +320,23 @@ export default function FileManagerPage() {
                                                 <Edit size={14} />
                                             </button>
                                             <button
+                                                className="btn btn-ghost btn-xs btn-square"
+                                                title="Copy"
+                                                onClick={(e) => { e.stopPropagation(); setClipboard({ path: file.path, op: 'copy' }); }}
+                                            >
+                                                <Copy size={14} />
+                                            </button>
+                                            <button
+                                                className="btn btn-ghost btn-xs btn-square"
+                                                title="Cut (Move)"
+                                                onClick={(e) => { e.stopPropagation(); setClipboard({ path: file.path, op: 'move' }); }}
+                                            >
+                                                <Scissors size={14} />
+                                            </button>
+                                            <button
                                                 className="btn btn-ghost btn-xs btn-square text-error"
                                                 title="Delete"
-                                                onClick={() => handleDelete(file)}
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(file); }}
                                             >
                                                 <Trash size={14} />
                                             </button>

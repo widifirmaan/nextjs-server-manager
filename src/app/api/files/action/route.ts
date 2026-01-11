@@ -29,8 +29,16 @@ export async function POST(req: Request) {
                 await fs.writeFile(targetPath, '');
                 break;
             case 'rename':
+            case 'move':
                 if (!newPath) return NextResponse.json({ error: 'New path required' }, { status: 400 });
+                // Check if destination exists to avoid accidental overwrite (optional but safer)
+                // For a simple manager, standard behavior is overwrite or fail. 
+                // fs.rename overwrites if dest exists (on Linux).
                 await fs.rename(targetPath, newPath);
+                break;
+            case 'copy':
+                if (!newPath) return NextResponse.json({ error: 'New path required' }, { status: 400 });
+                await fs.cp(targetPath, newPath, { recursive: true });
                 break;
             default:
                 return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
