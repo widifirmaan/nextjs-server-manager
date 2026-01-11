@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock } from 'lucide-react';
+import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X } from 'lucide-react';
 import clsx from 'clsx';
 // import { toast } from 'sonner';
 
 interface GitProject {
+    // ... (Keep existing interface)
     name: string;
     path: string;
     branch: string;
@@ -12,6 +13,7 @@ interface GitProject {
     ahead: number;
     behind: number;
     filesChanged: number;
+    files: { path: string, index: string, working_dir: string }[];
     remote: string;
     lastCommit: {
         message: string;
@@ -27,6 +29,13 @@ export default function GitPage() {
     const [error, setError] = useState('');
     const [processing, setProcessing] = useState<string | null>(null);
 
+    // Clone Modal State
+    const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
+    const [cloneUrl, setCloneUrl] = useState('');
+    const [cloneFolder, setCloneFolder] = useState('');
+    const [cloneLoading, setCloneLoading] = useState(false);
+
+    // ... (Keep existing functions: fetchProjects, handleAction, handleFetchAll, formatDate)
     const fetchProjects = async () => {
         setLoading(true);
         try {
@@ -80,11 +89,9 @@ export default function GitPage() {
 
     const handleFetchAll = async () => {
         if (!confirm('Fetch all projects? This might take a while.')) return;
-        setLoading(true); // Re-use loading state to block UI
+        setLoading(true);
 
         try {
-            // We'll just sequentially fetch all for now to keep it simple without new API
-            // Or better, let's just do it client side for simplicity given the current setup
             const promises = projects.map(p =>
                 fetch('/api/git/action', {
                     method: 'POST',
@@ -102,6 +109,35 @@ export default function GitPage() {
         }
     };
 
+    const handleClone = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!cloneUrl) return;
+
+        setCloneLoading(true);
+        try {
+            const res = await fetch('/api/git', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repoUrl: cloneUrl, folderName: cloneFolder }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                alert(`Error: ${data.error}`);
+            } else {
+                alert('Repository cloned successfully!');
+                setIsCloneModalOpen(false);
+                setCloneUrl('');
+                setCloneFolder('');
+                fetchProjects();
+            }
+        } catch (e) {
+            alert('Failed to clone repository');
+        } finally {
+            setCloneLoading(false);
+        }
+    };
+
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleString();
     };
@@ -113,6 +149,13 @@ export default function GitPage() {
                 <div className="flex gap-2">
                     <button
                         className="btn btn-primary btn-sm"
+                        onClick={() => setIsCloneModalOpen(true)}
+                    >
+                        <Plus size={18} className="mr-2" />
+                        Clone New
+                    </button>
+                    <button
+                        className="btn btn-sm btn-ghost border border-white/10"
                         onClick={handleFetchAll}
                         disabled={loading || projects.length === 0}
                     >
@@ -129,6 +172,67 @@ export default function GitPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Clone Modal */}
+            {isCloneModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-base-100 border border-white/10 rounded-lg shadow-xl w-full max-w-md p-6 relative">
+                        <button
+                            onClick={() => setIsCloneModalOpen(false)}
+                            className="absolute top-4 right-4 text-muted hover:text-white"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <h2 className="text-xl font-bold mb-4">Clone Repository</h2>
+                        <form onSubmit={handleClone}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Repository URL</label>
+                                    <input
+                                        type="text"
+                                        className="input w-full"
+                                        placeholder="https://github.com/username/repo.git"
+                                        value={cloneUrl}
+                                        onChange={(e) => setCloneUrl(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Folder Name (Optional)</label>
+                                    <input
+                                        type="text"
+                                        className="input w-full"
+                                        placeholder="Defaults to repo name"
+                                        value={cloneFolder}
+                                        onChange={(e) => setCloneFolder(e.target.value)}
+                                    />
+                                    <p className="text-xs text-muted mt-1">Will be cloned into /root/{cloneFolder || 'repo-name'}</p>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    onClick={() => setIsCloneModalOpen(false)}
+                                    disabled={cloneLoading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={cloneLoading || !cloneUrl}
+                                >
+                                    {cloneLoading && <Loader2 size={16} className="animate-spin mr-2" />}
+                                    Clone Repository
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <div className="mb-4 p-4 border border-red-500 bg-red-900/20 text-red-200 rounded flex items-center gap-2">
@@ -161,8 +265,33 @@ export default function GitPage() {
                                         {p.remote}
                                     </div>
 
+                                    {!p.isClean && (
+                                        <div className="mt-3 bg-base-200/50 rounded p-3 text-xs overflow-y-auto max-h-[300px]">
+                                            <p className="font-semibold text-warning mb-1">Modified Files:</p>
+                                            <ul className="list-disc list-inside space-y-1 text-muted">
+                                                {p.files?.slice(0, 100).map((f, i) => (
+                                                    <li key={i} className="font-mono">
+                                                        <span className={clsx(
+                                                            f.index === '?' ? 'text-blue-400' : // Untracked
+                                                                f.working_dir === 'M' ? 'text-yellow-400' : // Modified
+                                                                    f.working_dir === 'D' ? 'text-red-400' : '' // Deleted
+                                                        )}>
+                                                            {f.index === '?' ? '??' : f.working_dir}
+                                                        </span>{' '}
+                                                        {f.path}
+                                                    </li>
+                                                ))}
+                                                {p.files && p.files.length > 100 && (
+                                                    <li className="list-none text-muted italic ml-4">
+                                                        ...and {p.files.length - 100} more
+                                                    </li>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    )}
+
                                     {p.lastCommit ? (
-                                        <div className="bg-base-300/50 rounded p-3 text-sm">
+                                        <div className="bg-base-300/50 rounded p-3 text-sm mt-3">
                                             <div className="flex items-center gap-2 text-text-primary mb-1">
                                                 <GitCommit size={16} className="text-primary" />
                                                 <span className="font-medium">{p.lastCommit.message}</span>

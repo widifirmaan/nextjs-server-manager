@@ -50,6 +50,7 @@ export async function GET() {
                         ahead: status.ahead,
                         behind: status.behind,
                         filesChanged: status.files.length,
+                        files: status.files, // List of dirty files
                         remote: remotes[0]?.refs?.fetch || '',
                         lastCommit: lastCommit?.latest ? {
                             message: lastCommit.latest.message,
@@ -74,6 +75,48 @@ export async function GET() {
         return NextResponse.json(gitProjects);
     } catch (err: any) {
         console.error('Error listing git projects:', err);
+        return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+}
+
+export async function POST(req: Request) {
+    try {
+        const { repoUrl, folderName } = await req.json();
+
+        if (!repoUrl) {
+            return NextResponse.json({ error: 'Repository URL is required' }, { status: 400 });
+        }
+
+        let targetName = folderName;
+        if (!targetName) {
+            // Extract name from URL (e.g., https://github.com/user/repo.git -> repo)
+            const parts = repoUrl.split('/');
+            targetName = parts[parts.length - 1].replace('.git', '');
+        }
+
+        // Basic sanitization
+        targetName = targetName.replace(/[^a-zA-Z0-9-_]/g, '');
+
+        if (!targetName) {
+            return NextResponse.json({ error: 'Invalid target folder name' }, { status: 400 });
+        }
+
+        const targetPath = path.join(ROOT_DIR, targetName);
+
+        // Check if directory already exists
+        try {
+            await fs.access(targetPath);
+            return NextResponse.json({ error: `Directory ${targetName} already exists in /root/` }, { status: 400 });
+        } catch (e) {
+            // Good, directory doesn't exist
+        }
+
+        const git = simpleGit();
+        await git.clone(repoUrl, targetPath);
+
+        return NextResponse.json({ success: true, message: 'Repository cloned successfully' });
+    } catch (err: any) {
+        console.error('Clone error:', err);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
