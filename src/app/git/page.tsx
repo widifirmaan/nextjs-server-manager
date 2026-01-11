@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X, Box } from 'lucide-react';
+import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X, Box, Coffee } from 'lucide-react';
 import clsx from 'clsx';
 // import { toast } from 'sonner';
 
@@ -14,7 +14,7 @@ interface GitProject {
     behind: number;
     filesChanged: number;
     files: { path: string, index: string, working_dir: string }[];
-    dockerType?: 'compose' | 'file' | null; // Added
+    dockerType?: 'compose' | 'file' | 'springboot' | null; // Updated
     remote: string;
     lastCommit: {
         message: string;
@@ -330,6 +330,24 @@ export default function GitPage() {
                                                 <Loader2 size={16} className="animate-spin" />
                                             ) : (
                                                 <Box size={16} />
+                                            )}
+                                        </button>
+                                    )}
+                                    {p.dockerType === 'springboot' && (
+                                        <button
+                                            className="btn btn-success"
+                                            onClick={() => {
+                                                if (confirm('Rebuild Spring Boot? This will run "mvn clean package" and restart Docker if present.')) {
+                                                    handleAction(p.path, 'springboot-rebuild');
+                                                }
+                                            }}
+                                            disabled={!!processing || !!p.error}
+                                            title="Rebuild Spring Boot (Maven)"
+                                        >
+                                            {processing === `${p.path}-springboot-rebuild` ? (
+                                                <Loader2 size={16} className="animate-spin" />
+                                            ) : (
+                                                <Coffee size={16} />
                                             )}
                                         </button>
                                     )}
