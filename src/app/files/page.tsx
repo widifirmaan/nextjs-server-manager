@@ -199,19 +199,20 @@ export default function FileManagerPage() {
     };
 
     return (
-        <div className="h-full flex flex-col">
+        <div className="p-6 h-full flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 overflow-hidden">
-                    <button onClick={() => handleNavigate('/root')} className="btn btn-ghost btn-sm btn-square">
+            <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
+                <div className="flex items-center gap-2 overflow-hidden w-full md:w-auto p-2 bg-white/5 rounded-lg border border-white/5">
+                    <button onClick={() => handleNavigate('/root')} className="btn btn-ghost btn-sm btn-square text-primary">
                         <Home size={18} />
                     </button>
-                    <div className="flex items-center text-sm font-mono text-muted/80 whitespace-nowrap overflow-x-auto no-scrollbar">
+                    <div className="h-4 w-[1px] bg-white/10 mx-1"></div>
+                    <div className="flex items-center text-sm font-mono text-muted whitespace-nowrap overflow-x-auto no-scrollbar mask-gradient-right">
                         {currentPath.split('/').filter(Boolean).map((part, i, arr) => (
                             <div key={i} className="flex items-center">
                                 <ChevronRight size={14} className="mx-1 opacity-50" />
                                 <span
-                                    className="hover:text-primary cursor-pointer"
+                                    className="hover:text-primary cursor-pointer transition-colors"
                                     onClick={() => {
                                         const p = '/' + arr.slice(0, i + 1).join('/');
                                         handleNavigate(p);
@@ -246,7 +247,7 @@ export default function FileManagerPage() {
                     >
                         <Plus size={16} className="mr-2" /> Folder
                     </button>
-                    <button onClick={() => fetchFiles(currentPath)} className="btn btn-ghost btn-sm btn-square">
+                    <button onClick={() => fetchFiles(currentPath)} className="btn btn-ghost btn-sm btn-square border border-white/10">
                         <RefreshCw size={18} className={clsx(loading && "animate-spin")} />
                     </button>
                 </div>
@@ -259,11 +260,11 @@ export default function FileManagerPage() {
                     {error}
                 </div>
             ) : (
-                <div className="bg-base-200/30 rounded-lg border border-white/5 flex-1 overflow-auto">
+                <div className="glass-panel flex-1 overflow-hidden flex flex-col">
                     {/* Up Button */}
                     {currentPath !== '/' && (
                         <div
-                            className="flex items-center gap-3 p-3 hover:bg-white/5 cursor-pointer border-b border-white/5 text-muted"
+                            className="flex items-center gap-3 p-3 hover:bg-white/5 cursor-pointer border-b border-white/5 text-muted transition-colors"
                             onClick={handleUp}
                         >
                             <ArrowUp size={20} />
@@ -272,83 +273,102 @@ export default function FileManagerPage() {
                     )}
 
                     {/* Files List */}
-                    {loading && files.length === 0 ? (
-                        <div className="p-8 text-center text-muted">Loading...</div>
-                    ) : (
-                        <div>
-                            {files.map((file) => (
-                                <div
-                                    key={file.path}
-                                    className="group flex items-center justify-between p-3 hover:bg-white/5 border-b border-white/5 last:border-0"
-                                >
-                                    <div
-                                        className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
-                                        onClick={() => handleItemClick(file)}
-                                    >
-                                        {file.isDirectory ? (
-                                            <Folder size={20} className="text-yellow-400 shrink-0" />
-                                        ) : (
-                                            <FileText size={20} className="text-blue-400 shrink-0" />
-                                        )}
-                                        <span className="truncate">{file.name}</span>
-                                    </div>
-
-                                    <div className="flex items-center gap-6 text-sm text-muted">
-                                        <span className="w-20 text-right font-mono text-xs hidden sm:block">
-                                            {file.isDirectory ? '-' : formatSize(file.size)}
-                                        </span>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {!file.isDirectory && (
-                                                <button
-                                                    className="btn btn-ghost btn-xs btn-square"
-                                                    title="Edit Content"
-                                                    onClick={(e) => { e.stopPropagation(); openEditor(file); }}
-                                                >
-                                                    <FilePenLine size={14} />
-                                                </button>
-                                            )}
-                                            <button
-                                                className="btn btn-ghost btn-xs btn-square"
-                                                title="Rename"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setActiveItem(file);
-                                                    setModalInput(file.name);
-                                                    setModalOpen('rename');
-                                                }}
+                    <div className="overflow-auto flex-1">
+                        {loading && files.length === 0 ? (
+                            <div className="p-8 text-center text-muted">Loading...</div>
+                        ) : (
+                            <table className="table w-full">
+                                <thead>
+                                    <tr>
+                                        <th className="w-10"></th>
+                                        <th>Name</th>
+                                        <th className="w-24 text-right">Size</th>
+                                        <th className="w-32 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {files.map((file) => (
+                                        <tr
+                                            key={file.path}
+                                            className="group hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors"
+                                        >
+                                            <td className="w-10 text-center">
+                                                {file.isDirectory ? (
+                                                    <Folder size={20} className="text-yellow-400" />
+                                                ) : (
+                                                    <FileText size={20} className="text-blue-400" />
+                                                )}
+                                            </td>
+                                            <td
+                                                className="cursor-pointer font-medium"
+                                                onClick={() => handleItemClick(file)}
                                             >
-                                                <Edit size={14} />
-                                            </button>
-                                            <button
-                                                className="btn btn-ghost btn-xs btn-square"
-                                                title="Copy"
-                                                onClick={(e) => { e.stopPropagation(); setClipboard({ path: file.path, op: 'copy' }); }}
-                                            >
-                                                <Copy size={14} />
-                                            </button>
-                                            <button
-                                                className="btn btn-ghost btn-xs btn-square"
-                                                title="Cut (Move)"
-                                                onClick={(e) => { e.stopPropagation(); setClipboard({ path: file.path, op: 'move' }); }}
-                                            >
-                                                <Scissors size={14} />
-                                            </button>
-                                            <button
-                                                className="btn btn-ghost btn-xs btn-square text-error"
-                                                title="Delete"
-                                                onClick={(e) => { e.stopPropagation(); handleDelete(file); }}
-                                            >
-                                                <Trash size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {files.length === 0 && (
-                                <div className="p-8 text-center text-muted italic">Empty directory</div>
-                            )}
-                        </div>
-                    )}
+                                                {file.name}
+                                                <div className="text-xs text-muted md:hidden">
+                                                    {file.isDirectory ? 'Dir' : formatSize(file.size)}
+                                                </div>
+                                            </td>
+                                            <td className="text-right font-mono text-sm text-muted hidden sm:table-cell">
+                                                {file.isDirectory ? '-' : formatSize(file.size)}
+                                            </td>
+                                            <td className="text-right">
+                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {!file.isDirectory && (
+                                                        <button
+                                                            className="btn btn-ghost btn-xs btn-square"
+                                                            title="Edit Content"
+                                                            onClick={(e) => { e.stopPropagation(); openEditor(file); }}
+                                                        >
+                                                            <FilePenLine size={14} />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        className="btn btn-ghost btn-xs btn-square"
+                                                        title="Rename"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveItem(file);
+                                                            setModalInput(file.name);
+                                                            setModalOpen('rename');
+                                                        }}
+                                                    >
+                                                        <Edit size={14} />
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-ghost btn-xs btn-square"
+                                                        title="Copy"
+                                                        onClick={(e) => { e.stopPropagation(); setClipboard({ path: file.path, op: 'copy' }); }}
+                                                    >
+                                                        <Copy size={14} />
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-ghost btn-xs btn-square"
+                                                        title="Cut (Move)"
+                                                        onClick={(e) => { e.stopPropagation(); setClipboard({ path: file.path, op: 'move' }); }}
+                                                    >
+                                                        <Scissors size={14} />
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-ghost btn-xs btn-square text-error hover:bg-error/10"
+                                                        title="Delete"
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(file); }}
+                                                    >
+                                                        <Trash size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                        {!loading && files.length === 0 && (
+                            <div className="p-12 text-center text-muted italic flex flex-col items-center gap-2">
+                                <Folder size={48} className="opacity-20" />
+                                <span>Empty directory</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
