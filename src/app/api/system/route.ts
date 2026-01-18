@@ -150,21 +150,39 @@ async function getWattage() {
 
 async function getWeather() {
     try {
-        const geoRes = await fetch('http://ip-api.com/json/', { next: { revalidate: 3600 } });
-        if (!geoRes.ok) return null;
-        const geo = await geoRes.json();
+        // Logandeng Coordinates
+        const lat = -7.938;
+        const lon = 110.575;
+        const locationName = "Logandeng";
+        const countryCode = "ID";
 
         const weatherRes = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&current_weather=true`,
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=1`,
             { next: { revalidate: 300 } }
         );
         const weatherData = await weatherRes.json();
 
+        // Process hourly data
+        const hourly: any[] = [];
+        if (weatherData.hourly && weatherData.hourly.time) {
+            weatherData.hourly.time.forEach((t: string, i: number) => {
+                const date = new Date(t);
+                const hour = date.getHours().toString().padStart(2, '0') + ':00';
+                hourly.push({
+                    time: t,
+                    hour: hour,
+                    temp: weatherData.hourly.temperature_2m[i],
+                    code: weatherData.hourly.weathercode[i]
+                });
+            });
+        }
+
         return {
             temp: weatherData.current_weather?.temperature,
             code: weatherData.current_weather?.weathercode,
-            location: geo.city,
-            country: geo.countryCode
+            location: locationName,
+            country: countryCode,
+            hourly: hourly
         };
     } catch (e) {
         return null;

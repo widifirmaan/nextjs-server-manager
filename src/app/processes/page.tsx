@@ -29,7 +29,7 @@ export default function ProcessMonitor() {
 
     useEffect(() => {
         fetchProcesses();
-        const interval = setInterval(fetchProcesses, 3000);
+        const interval = setInterval(fetchProcesses, 6000); // 6s refresh
         return () => clearInterval(interval);
     }, []);
 
