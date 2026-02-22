@@ -1,128 +1,128 @@
-# Tunneled Server Manager
+# 🖥️ Tunneled Server Manager - Modern Web Infrastructure Hub
 
-A modern, responsive, and secure web-based server management dashboard built with Next.js. Monitor system resources, manage Docker containers, control Cloudflare Tunnels, and access a web-based terminal—all from a single, beautiful interface.
+**Tunneled Server Manager** is a state-of-the-art, web-based management dashboard designed for home labs and servers tucked behind ISP-NAT environments. Built with **Next.js 15+** and **React 19**, it offers a secure, high-performance interface to monitor system health, manage Docker containers, and access a web terminal from anywhere—without exposing your public IP or requiring port forwarding.
 
-![Dashboard Overview](screenshots/dashboard.png)
+![Status](https://img.shields.io/badge/Status-Active_Development-success?style=for-the-badge)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)
+![Tailwind](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=for-the-badge&logo=tailwindcss)
+![Docker](https://img.shields.io/badge/Docker-Latest-blue?style=for-the-badge&logo=docker)
 
-## 🚀 Why Use This?
+---
 
-**The Perfect Solution for Home Labs & ISP-NAT Environments.**
+## 📸 Application Showcase
 
-Accessing your home server remotely can be a pain, especially if your ISP doesn't provide a Static IP or puts you behind CG-NAT. This project solves that problem eleganty.
+Explore the comprehensive features of **Tunneled Server Manager** through our gallery.
 
-By leveraging **Cloudflare Tunnels**, this dashboard allows you to securely access your server's SSH terminal, Docker containers, and system stats from anywhere in the world—**without port forwarding, without exposing your public IP, and without needing a static IP address.**
+| | |
+|:---:|:---:|
+| ![Dashboard](screenshots/dashboard.png)<br>**System Overview** | ![Docker](screenshots/docker.png)<br>**Container Management** |
+| ![Tunnels](screenshots/tunnels.png)<br>**Cloudflare Tunnels** | ![Terminal](screenshots/terminal.png)<br>**Web Terminal** |
+| ![Mobile](screenshots/mobile.png)<br>**Mobile Responsive** | **Stay Tuned** |
 
-## Features
+---
 
-*   **System Monitoring:** Real-time visualization of CPU usage, Memory, Disk Space, and Server Uptime.
-*   **Docker Management:** View, start, stop, restart, and remove Docker containers. Monitor container status and image details.
-*   **Web Terminal:** Fully functional, secure web-based terminal (using WebSocket) to execute shell commands directly on your server.
-*   **Cloudflare Tunnels:** Manage and monitor your Cloudflare Tunnel configurations and status.
-*   **Responsive Design:** Optimized for both desktop and mobile devices with a sleek "cyberpunk" aesthetic.
-*   **Secure:**
-    *   Protected by password authentication.
-    *   HttpOnly cookies for session management.
-    *   DevTools blocking (client-side) to deter casual inspection.
-    *   Execution of arbitrary commands is protected behind authentication.
+## 🚀 Features Overview
 
-## 🔮 Upcoming Features (Roadmap)
-
-We are constantly expanding! Stay tuned for these powerful additions:
-
-*   **Node Manager:** Easy management of Node.js versions and processes.
-*   **Server Package Manager:** GUI for `apt` / `yum` to install and update system packages.
-*   **PHP Manager:** Switch PHP versions and manage extensions effortlessly.
-*   **Database Manager:** Integrated GUI for managing MySQL/PostgreSQL databases.
-*   **File Manager:** Browse and edit server files directly from the browser.
-
-## Screenshots
-
-### 🖥️ Dashboard
-Get a quick overview of your server's health.
-![Dashboard](screenshots/dashboard.png)
+### 📊 System Monitoring
+*   **Real-time Visualization**: Monitor CPU usage, Memory, Disk Space, and Server Uptime with beautiful charts.
+*   **Dynamic UI**: Auto-updating statistics powered by WebSockets for an instant feel.
+*   **Deep Integration**: Powered by `systeminformation` to provide accurate hardware data.
 
 ### 🐳 Docker Management
-Easily manage your containers.
-![Docker](screenshots/docker.png)
-
-### 🌐 Cloudflare Tunnels
-Monitor your tunnel connections.
-![Tunnels](screenshots/tunnels.png)
+*   **Container Ops**: View, start, stop, restart, and remove containers with a single click.
+*   **Health Tracking**: Monitor container status, image details, and runtime information.
+*   **Secure API**: Interaction via `dockerode` specifically protected behind authentication.
 
 ### ⌨️ Web Terminal
-Direct ssh-like access from your browser.
-![Terminal](screenshots/terminal.png)
+*   **SSH-like Experience**: Fully functional terminal in your browser with support for complex commands.
+*   **Real-time Stream**: Powered by `node-pty` and `xterm.js` for low-latency command execution.
+*   **Encrypted Traffic**: Tunnel your shell access securely through Cloudflare without open ports.
 
-### 📱 Mobile View
-Fully responsive interface for management on the go.
-![Mobile Sidebar](screenshots/mobile.png)
+### 🌐 Cloudflare Tunnels
+*   **ISP-NAT Solution**: Perfect for servers behind CG-NAT or those without a Static IP.
+*   **Tunnel Management**: Monitor tunnel status and manage connections directly from the dashboard.
+*   **No Port-Forwarding**: Secure your server while keeping all ports closed to the public internet.
 
-## Technology Stack
+### 🛡️ Security First
+*   **Authenticated Access**: Every management action is protected by password authentication.
+*   **Secure Cookies**: Session management using `HttpOnly` and `SameSite` flags.
+*   **Client Protection**: Built-in DevTools detection to deter inspection of authenticated sessions.
 
-*   **Framework:** Next.js 14+ (App Router)
-*   **Language:** TypeScript
-*   **Styling:** Tailwind CSS + CSS Modules (Custom Cyberpunk Theme)
-*   **Backend:** Node.js (integrated via Next.js API Routes)
-*   **Real-time:** Socket.IO (for Terminal)
-*   **System Interactions:** `node-pty` (Terminal), `dockerode` (Docker), `systeminformation` (Stats)
+---
 
-## Getting Started
+## 🛠 Tech Stack
+
+### Frontend & UI
+*   **Framework**: Next.js 15+ (App Router)
+*   **Style**: Tailwind CSS + Custom Cyberpunk/Neo-Brutalist design
+*   **Animations**: Framer Motion for smooth transitions and hover effects
+*   **Icons**: Lucide React Icons
+
+### Backend & Core
+*   **Runtime**: Node.js (Custom server implementation)
+*   **Real-time**: Socket.IO for terminal streams and resource updates
+*   **System Utilities**: `dockerode` (Docker), `node-pty` (Terminal), `systeminformation` (Stats)
+
+---
+
+## 📂 Project Structure
+
+```bash
+/
+├── src/
+│   ├── app/                # Next.js App Router (Pages & API)
+│   ├── components/         # Modular UI Components
+│   └── middleware.ts       # Auth and Security Middleware
+├── public/                 # Static Assets (Images, Icons)
+├── screenshots/            # Project showcase snapshots
+├── server.js               # Custom Socket.IO & Next.js Server
+├── package.json            # Scripts & Dependencies
+└── tsconfig.json           # TypeScript Configuration
+```
+
+---
+
+## 📦 Getting Started
 
 ### Prerequisites
+*   **Node.js 18+**
+*   **Docker** (Installed and running on the host)
+*   **Cloudflare Tunnel** (cloudflared) installed and configured
 
-*   Node.js 18+
-*   Docker (if using Docker features)
-*   Cloudflare Tunnel (cloudflared) installed (if using Tunnel features)
+### Setup Instructions
 
-### Installation
-
-1.  **Clone the repository:**
+1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/yourusername/server-manager.git
-    cd server-manager
+    git clone https://github.com/widifirmaan/nextjs-server-manager.git
+    cd nextjs-server-manager
     ```
 
-2.  **Install dependencies:**
+2.  **Install Dependencies**
     ```bash
     npm install
     ```
 
-3.  **Setup Environment Variables:**
-    Create a `.env` file in the root directory:
+3.  **Environment Configuration**
+    Create a `.env` file in the root:
     ```env
-    # Password for login
-    AUTH_PASSWORD=YourSecurePassword
+    AUTH_PASSWORD=YourVerySecurePassword
     ```
 
-4.  **Run Development Server:**
+4.  **Run Locally**
     ```bash
     npm run dev
     ```
-    Access the app at `http://localhost:3000`.
+    *Open `http://localhost:3000` in your browser.*
 
-### Deployment (Production)
+---
 
-1.  **Build the application:**
-    ```bash
-    npm run build
-    ```
+## 👥 Authors
 
-2.  **Start the server:**
-    ```bash
-    npm start
-    ```
-    Or use PM2 for process management:
-    ```bash
-    pm2 start npm --name "server-manager" -- start
-    ```
+Developed by **Widi Firmaan**.
 
-## Security Note
+---
 
-This application provides root-level access (via terminal and docker controls) to the underlying server. Ensure you:
-*   Use a strong `AUTH_PASSWORD`.
-*   Run this application behind a secure reverse proxy (like Nginx or Cloudflare Tunnel) with HTTPS.
-*   Do not expose the raw port (3000/8001) directly to the internet without protection.
+## 📜 License
 
-## License
-
-[FREE AS F00CK](LICENSE)
+This project is open source.
