@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 export default function Dashboard() {
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -77,61 +79,94 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Weather Card (First) */}
         {stats.weather && (
-          <div className="col-span-1 md:col-span-2 lg:col-span-4 glass-panel p-6 relative overflow-hidden group">
-            {/* Background Gradient Effect */}
-            <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/20 rounded-full blur-[100px] pointer-events-none"></div>
-            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-cyan-400/10 rounded-full blur-[80px] pointer-events-none"></div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="col-span-1 md:col-span-2 lg:col-span-4 glass-panel p-6 md:p-8 relative overflow-hidden group border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+          >
+            {/* Background Dynamic Gradients */}
+            <div className={clsx(
+              "absolute -top-24 -right-24 w-96 h-96 rounded-full blur-[120px] pointer-events-none transition-all duration-1000",
+              getWeatherColors(stats.weather.code).bgGlow1
+            )}></div>
+            <div className={clsx(
+              "absolute -bottom-24 -left-24 w-64 h-64 rounded-full blur-[100px] pointer-events-none transition-all duration-1000",
+              getWeatherColors(stats.weather.code).bgGlow2
+            )}></div>
 
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 relative z-10">
-              <div className="flex items-center gap-6">
-                <div className="p-5 bg-gradient-to-br from-cyan-400/20 to-blue-600/20 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-md">
-                  <Cloud className="text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]" size={42} />
-                </div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-8 relative z-10">
+              <div className="flex items-center gap-6 md:gap-8">
+                <motion.div
+                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  className={clsx(
+                    "p-6 rounded-[2.5rem] border border-white/10 shadow-2xl backdrop-blur-xl transition-all duration-500",
+                    getWeatherColors(stats.weather.code).iconBox
+                  )}
+                >
+                  <Cloud className={clsx("transition-colors duration-500", getWeatherColors(stats.weather.code).icon)} size={48} />
+                </motion.div>
                 <div>
-                  <div className="flex items-center gap-2 text-muted text-sm font-medium mb-2 uppercase tracking-wider">
-                    <Globe size={14} className="text-cyan-400" />
-                    {stats.weather.location}, {stats.weather.country}
+                  <div className="flex items-center gap-2 text-muted text-sm font-semibold mb-3 uppercase tracking-[0.2em]">
+                    <Globe size={14} className={getWeatherColors(stats.weather.code).icon} />
+                    {stats.weather.location} · {stats.weather.country}
                   </div>
-                  <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-                    <span className="text-5xl md:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <span className="text-6xl md:text-8xl font-black tracking-tighter text-white drop-shadow-2xl">
                       {Math.round(stats.weather.temp)}°
                     </span>
-                    <div className="flex flex-col mb-1.5">
-                      <span className="text-lg font-medium text-cyan-100/90">{getWeatherLabel(stats.weather.code)}</span>
-                      <span className="text-xs text-muted/60 hidden md:inline-block">RealFeel® {Math.round(stats.weather.temp)}°</span>
+                    <div className="flex flex-col">
+                      <span className="text-2xl md:text-3xl font-bold text-white/90 mb-1">{getWeatherLabel(stats.weather.code)}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-white/50 bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
+                          RealFeel® {Math.round(stats.weather.temp)}°
+                        </span>
+                        <div className="h-1 w-1 rounded-full bg-white/20"></div>
+                        <span className="text-sm font-medium text-white/40">
+                          {new Date().toLocaleDateString('en-US', { weekday: 'long' })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="w-full md:w-auto flex justify-between md:block text-right border-t md:border-t-0 border-white/5 pt-4 md:pt-0 mt-2 md:mt-0">
-                <div>
-                  <div className="text-sm font-medium text-white/90">Today's Forecast</div>
-                  <div className="text-xs text-muted">24-Hour Overview</div>
+              <div className="w-full md:w-auto flex justify-between md:flex-col items-end gap-2 border-t md:border-t-0 border-white/5 pt-6 md:pt-0">
+                <div className="text-right">
+                  <div className="text-sm font-bold text-white/90">24-Hour Forecast</div>
+                  <div className="text-xs font-medium text-muted/60">Updated just now</div>
                 </div>
-                {/* Mobile Only Weather Icon/Label Duplicate if needed, or just keep simple */}
+                <div className="flex gap-1 md:mt-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className={clsx("w-1.5 h-1.5 rounded-full", i === 1 ? "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" : "bg-white/10")}></div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Hourly Forecast Scrollable Area */}
+            {/* Hourly Forecast Area */}
             <div className="relative w-full">
-              {/* Fade masks for scroll indication */}
-              <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#0a0a0a] to-transparent z-10 pointer-events-none hidden md:block"></div>
-              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#0a0a0a] to-transparent z-10 pointer-events-none hidden md:block"></div>
+              {/* Refined gradient masks */}
+              <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-black/20 to-transparent z-10 pointer-events-none rounded-l-2xl"></div>
+              <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-black/20 to-transparent z-10 pointer-events-none rounded-r-2xl"></div>
 
-              <div className="flex gap-3 overflow-x-auto pb-4 pt-2 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div className="flex gap-4 overflow-x-auto pb-4 pt-2 snap-x hide-scrollbar mask-fade" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {stats.weather.hourly?.map((h: any, i: number) => (
-                  <div key={i} className="snap-start flex flex-col items-center justify-center gap-3 min-w-[80px] p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-300 group/item cursor-default">
-                    <span className="text-xs text-muted font-mono">{h.hour}</span>
-                    <span className="text-3xl filter drop-shadow-lg transform group-hover/item:scale-110 transition-transform duration-300" title={getWeatherLabel(h.code)}>
+                  <motion.div
+                    key={i}
+                    whileHover={{ y: -5, backgroundColor: 'rgba(255,255,255,0.12)' }}
+                    className="snap-start flex flex-col items-center justify-center gap-4 min-w-[90px] p-5 rounded-[2rem] bg-white/5 border border-white/5 hover:border-white/20 transition-all duration-300 cursor-default"
+                  >
+                    <span className="text-xs text-white/50 font-bold uppercase tracking-widest">{h.hour}</span>
+                    <span className="text-4xl filter drop-shadow-2xl brightness-125" title={getWeatherLabel(h.code)}>
                       {getWeatherEmoji(h.code)}
                     </span>
-                    <span className="text-sm font-bold text-white/90">{Math.round(h.temp)}°</span>
-                  </div>
+                    <span className="text-lg font-black text-white">{Math.round(h.temp)}°</span>
+                  </motion.div>
                 ))}
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Row 1: Core Resources */}
@@ -201,6 +236,52 @@ export default function Dashboard() {
       </div>
     </div>
   )
+}
+
+function getWeatherColors(code: number) {
+  // Sunny / Clear
+  if (code === 0) return {
+    bgGlow1: 'bg-orange-500/30',
+    bgGlow2: 'bg-yellow-400/20',
+    iconBox: 'from-orange-400/20 to-yellow-600/20',
+    icon: 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]'
+  };
+  // Cloudy
+  if (code >= 1 && code <= 3) return {
+    bgGlow1: 'bg-blue-400/20',
+    bgGlow2: 'bg-slate-400/10',
+    iconBox: 'from-blue-400/20 to-slate-600/20',
+    icon: 'text-blue-300 drop-shadow-[0_0_15px_rgba(147,197,253,0.5)]'
+  };
+  // Foggy
+  if (code >= 45 && code <= 48) return {
+    bgGlow1: 'bg-gray-400/20',
+    bgGlow2: 'bg-gray-600/10',
+    iconBox: 'from-gray-400/20 to-gray-600/20',
+    icon: 'text-gray-300 drop-shadow-[0_0_15px_rgba(209,213,219,0.5)]'
+  };
+  // Rain
+  if (code >= 51 && code <= 67 || code >= 80 && code <= 82) return {
+    bgGlow1: 'bg-cyan-500/30',
+    bgGlow2: 'bg-blue-600/20',
+    iconBox: 'from-cyan-400/20 to-blue-600/20',
+    icon: 'text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.6)]'
+  };
+  // Thunderstorm
+  if (code >= 95 && code <= 99) return {
+    bgGlow1: 'bg-purple-600/30',
+    bgGlow2: 'bg-blue-900/40',
+    iconBox: 'from-purple-500/20 to-blue-900/30',
+    icon: 'text-purple-400 drop-shadow-[0_0_15px_rgba(192,132,252,0.6)]'
+  };
+
+  // Default
+  return {
+    bgGlow1: 'bg-blue-500/20',
+    bgGlow2: 'bg-cyan-400/10',
+    iconBox: 'from-cyan-400/20 to-blue-600/20',
+    icon: 'text-cyan-400'
+  };
 }
 
 function getWeatherEmoji(code: number) {
