@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus } from 'lucide-react';
+import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus, FileJson, Files, FileImage, FileText, Braces, FileTerminal } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /* ─── Types ─── */
@@ -25,6 +25,39 @@ interface EditorTab {
     content: string;
     isModified: boolean;
 }
+
+const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+        case 'js':
+        case 'jsx':
+            return <FileCode size={16} />;
+        case 'ts':
+        case 'tsx':
+            return <FileCode size={16} />;
+        case 'json':
+            return <FileJson size={16} />;
+        case 'css':
+        case 'scss':
+            return <Files size={16} />;
+        case 'md':
+            return <FileText size={16} />;
+        case 'html':
+            return <FileCode size={16} />;
+        case 'png':
+        case 'jpg':
+        case 'jpeg':
+        case 'gif':
+        case 'svg':
+            return <FileImage size={16} />;
+        case 'py':
+            return <Braces size={16} />;
+        case 'sh':
+            return <FileTerminal size={16} />;
+        default:
+            return <File size={16} />;
+    }
+};
 
 /* ─── File Tree Item ─── */
 function FileTreeItem({ node, depth, onToggle, onSelect, activePath, onContextMenu, renamingNode, setRenamingNode, handleAction }: {
@@ -62,7 +95,7 @@ function FileTreeItem({ node, depth, onToggle, onSelect, activePath, onContextMe
                 <span className="file-tree-icon">
                     {node.isDirectory
                         ? (node.isOpen ? <FolderOpen size={16} /> : <Folder size={16} />)
-                        : <File size={16} />
+                        : getFileIcon(node.name)
                     }
                 </span>
                 <span className="file-tree-name">
@@ -282,11 +315,15 @@ export default function AIPage() {
     const handleSubmit = async (e: React.FormEvent, overrideMsg?: string) => {
         e.preventDefault();
         const userMsg = overrideMsg || input.trim();
-        if (!userMsg || isLoading) return;
-        
+        if (!userMsg) return;
+
         if (!overrideMsg) setInput('');
-        setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
         setIsLoading(true);
+        const newMessages: { role: 'user' | 'assistant', content: string }[] = [...messages, { role: 'user', content: userMsg }];
+        setMessages(newMessages);
+
+        // Add a placeholder for the assistant's response
+        setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
         const fileContent = activeTab ? activeTab.content : undefined;
         const fileName = activeTab ? activeTab.name : undefined;
@@ -295,16 +332,39 @@ export default function AIPage() {
             const res = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     message: userMsg,
                     fileContent,
                     fileName
                 }),
             });
-            const data = await res.json();
-            setMessages((prev) => [...prev, { role: 'assistant', content: res.ok ? data.reply : `Error: ${data.error}` }]);
+
+            if (!res.body) {
+                throw new Error("No response body");
+            }
+            
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let done = false;
+
+            while (!done) {
+                const { value, done: readerDone } = await reader.read();
+                done = readerDone;
+                const chunk = decoder.decode(value, { stream: true });
+                
+                setMessages(prev => 
+                    prev.map((msg, i) => 
+                        i === prev.length - 1 ? { ...msg, content: msg.content + chunk } : msg
+                    )
+                );
+            }
+
         } catch (error: any) {
-            setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
+            setMessages(prev => 
+                prev.map((msg, i) => 
+                    i === prev.length - 1 ? { ...msg, content: `Error: ${error.message}` } : msg
+                )
+            );
         } finally {
             setIsLoading(false);
             inputRef.current?.focus();
@@ -584,8 +644,8 @@ export default function AIPage() {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: var(--text-secondary);
                     margin-right: 4px;
+                    color: var(--text-secondary);
                 }
                 .file-tree-item:hover .file-tree-icon,
                 .file-tree-item.selected .file-tree-icon {
@@ -800,6 +860,19 @@ export default function AIPage() {
                     height: 6px;
                     background: var(--primary);
                     border-radius: 50%;
+                }
+
+                @keyframes blink {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0; }
+                }
+                .blinking-cursor {
+                    display: inline-block;
+                    width: 8px;
+                    height: 1rem;
+                    background: var(--primary);
+                    animation: blink 1s step-end infinite;
+                    margin-left: 4px;
                 }
 
                 /* ── AI Actions in Chat ── */
@@ -1026,7 +1099,6 @@ export default function AIPage() {
                                 <p style={{ fontSize: '0.8rem' }}>Ask anything about the project</p>
                             </div>
                         )}
-                        <AnimatePresence>
                             {messages.map((msg, i) => (
                                 <motion.div
                                     key={i}
@@ -1036,18 +1108,10 @@ export default function AIPage() {
                                 >
                                     <div className={`msg-bubble ${msg.role === 'user' ? 'user' : 'bot'}`}>
                                         {msg.role === 'user' ? msg.content : renderAIMessage(msg.content)}
+                                        {isLoading && i === messages.length - 1 && <span className="blinking-cursor" />}
                                     </div>
                                 </motion.div>
                             ))}
-                        </AnimatePresence>
-                        {isLoading && (
-                            <div className="msg-row">
-                                <div className="msg-bubble bot" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                    <Loader2 size={14} className="animate-spin" />
-                                    <span>Thinking...</span>
-                                </div>
-                            </div>
-                        )}
                         <div ref={messagesEndRef} />
                     </div>
 

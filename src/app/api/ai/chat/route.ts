@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 
+export const dynamic = 'force-dynamic'; // Ensure dynamic execution
+
 export async function POST(req: NextRequest) {
     try {
         const { message, fileContent, fileName } = await req.json();
         
         if (!message) {
-            return NextResponse.json({ error: "Message is required" }, { status: 400 });
+            return new Response("Message is required", { status: 400 });
         }
 
         const SYSTEM_PROMPT = `You are an AI Coding Assistant integrated into a web IDE.
@@ -32,49 +34,46 @@ GUIDELINES:
         }
         fullPrompt += `USER REQUEST:\n${message}`;
 
-        return new Promise<Response>((resolve) => {
-            // Call system-installed gemini cli with headless prompt and text format
-            // Use '-' following '-p' to read from stdin (assuming gemini CLI supports this pattern)
-            // If it doesn't support '-', we can just use prompt with a stdin pipe
-            const child = spawn('gemini', ['-p', '-', '-o', 'text'], {
-                shell: true 
-            });
+        const stream = new ReadableStream({
+            start(controller) {
+                const child = spawn('gemini', ['-p', '-', '-o', 'text'], {
+                    shell: true 
+                });
 
-            // Write the prompt to stdin
-            child.stdin.write(fullPrompt);
-            child.stdin.end();
+                child.stdin.write(fullPrompt);
+                child.stdin.end();
 
-            let output = '';
-            let errorOutput = '';
+                child.stdout.on('data', (data) => {
+                    controller.enqueue(data);
+                });
 
-            child.stdout.on('data', (data) => {
-                output += data.toString();
-            });
+                child.stderr.on('data', (data) => {
+                    // We can optionally prefix stderr to differentiate on the client
+                    controller.enqueue(data);
+                });
 
-            child.stderr.on('data', (data) => {
-                errorOutput += data.toString();
-            });
+                child.on('close', (code) => {
+                    if (code !== 0) {
+                        controller.enqueue(`\n[PROCESS EXITED WITH CODE ${code}]`);
+                    }
+                    controller.close();
+                });
+                
+                child.on('error', (err) => {
+                    controller.enqueue(`\n[ERROR: ${err.message}]`);
+                    controller.close();
+                });
+            },
+        });
 
-            child.on('close', (code) => {
-                // If it fails or outputs error, we resolve gracefully to show in chat
-                if (code !== 0) {
-                    resolve(NextResponse.json(
-                        { error: errorOutput || `Process exited with code ${code}` }, 
-                        { status: 500 }
-                    ));
-                } else {
-                    resolve(NextResponse.json({ reply: output.trim() }));
-                }
-            });
-            
-            // Handle spawn errors (e.g., gemini CLI not found)
-            child.on('error', (err) => {
-                resolve(NextResponse.json({ error: `Failed to start gemini CLI: ${err.message}` }, { status: 500 }));
-            });
+        return new Response(stream, {
+            headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+            },
         });
 
     } catch (error: any) {
         console.error("AI API Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return new Response(error.message, { status: 500 });
     }
 }
