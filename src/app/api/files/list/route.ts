@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
-        let dirPath = searchParams.get('path') || '/root'; // Default to /root
+        let dirPath = searchParams.get('path') || '/'; // Default to current project dir
 
         // Basic formatting
         dirPath = path.normalize(dirPath);

@@ -3,17 +3,28 @@ import { spawn } from 'child_process';
 
 export async function POST(req: NextRequest) {
     try {
-        const { message } = await req.json();
+        const { message, fileContent, fileName } = await req.json();
         
         if (!message) {
             return NextResponse.json({ error: "Message is required" }, { status: 400 });
         }
 
+        let fullPrompt = message;
+        if (fileContent && fileName) {
+            fullPrompt = `CONTEXT (File: ${fileName}):\n\n${fileContent}\n\n---\n\nUSER REQUEST:\n${message}`;
+        }
+
         return new Promise((resolve) => {
             // Call system-installed gemini cli with headless prompt and text format
-            const child = spawn('gemini', ['-p', message, '-o', 'text'], {
-                shell: true // required on some systems to resolve the global bin natively
+            // Use '-' following '-p' to read from stdin (assuming gemini CLI supports this pattern)
+            // If it doesn't support '-', we can just use prompt with a stdin pipe
+            const child = spawn('gemini', ['-p', '-', '-o', 'text'], {
+                shell: true 
             });
+
+            // Write the prompt to stdin
+            child.stdin.write(fullPrompt);
+            child.stdin.end();
 
             let output = '';
             let errorOutput = '';
