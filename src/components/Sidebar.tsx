@@ -98,7 +98,7 @@ export default function Sidebar() {
                 <nav className="flex flex-col gap-2">
                     {links.map((link) => {
                         const Icon = link.icon;
-                        const isActive = pathname === link.href;
+                        const isActive = link.href === '/' ? pathname === link.href : pathname?.startsWith(link.href);
                         return (
                             <Link key={link.href} href={link.href} className={clsx('nav-item', isActive && 'active')}>
                                 <Icon size={20} />

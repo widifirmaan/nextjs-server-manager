@@ -24,7 +24,7 @@ export default function RootLayout({
         <DevToolsBlocker />
         <div className="layout">
           <Sidebar />
-          <main className="content">
+          <main className="content relative">
             {children}
           </main>
         </div>
