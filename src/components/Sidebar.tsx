@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Terminal, Server, Globe, Activity, Menu, X, LogOut, GitBranch, Folder } from 'lucide-react';
+import { Terminal, Server, Globe, Activity, Menu, X, LogOut, GitBranch, Folder, Bot } from 'lucide-react';
 import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
@@ -40,6 +40,7 @@ export default function Sidebar() {
 
     const links = [
         { href: '/', label: 'Overview', icon: Activity },
+        { href: '/ai', label: 'AI Chat', icon: Bot },
         { href: '/docker', label: 'Docker', icon: Server },
         { href: '/git', label: 'Git Projects', icon: GitBranch },
         { href: '/files', label: 'File Manager', icon: Folder },
