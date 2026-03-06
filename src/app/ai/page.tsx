@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit } from 'lucide-react';
+import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /* ─── Types ─── */
@@ -279,11 +279,12 @@ export default function AIPage() {
     };
 
     /* chat submit */
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent, overrideMsg?: string) => {
         e.preventDefault();
-        if (!input.trim() || isLoading) return;
-        const userMsg = input.trim();
-        setInput('');
+        const userMsg = overrideMsg || input.trim();
+        if (!userMsg || isLoading) return;
+        
+        if (!overrideMsg) setInput('');
         setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
         setIsLoading(true);
 
@@ -333,6 +334,11 @@ export default function AIPage() {
                     path: clipboard.node.path, 
                     newPath 
                 };
+            } else if (action === 'create-file' || action === 'create-dir') {
+                body.path = node.path.endsWith('/') ? `${node.path}${extra}` : `${node.path}/${extra}`;
+                if (action === 'create-file') {
+                    // We'll use the API's create-file logic
+                }
             }
 
             const res = await fetch('/api/files/action', {
@@ -346,6 +352,44 @@ export default function AIPage() {
                 fetchDir('/').then(setFileTree);
                 if (action === 'rename') setRenamingNode(null);
                 if (action === 'paste') setClipboard(null);
+                return true;
+            } else {
+                const data = await res.json();
+                alert(`Error: ${data.error}`);
+                return false;
+            }
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+            return false;
+        }
+    };
+
+    const applyCodeChange = (newContent: string) => {
+        if (!activeTabId) return;
+        setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, content: newContent, isModified: true } : t));
+    };
+
+    const handleClear = () => setMessages([]);
+
+    const handleAICreate = async (type: 'file' | 'dir', path: string, content?: string) => {
+        try {
+            const action = type === 'file' ? 'create-file' : 'create-dir';
+            const res = await fetch('/api/files/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, path }),
+            });
+
+            if (res.ok) {
+                if (type === 'file' && content) {
+                    await fetch('/api/files/content', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path, content }),
+                    });
+                }
+                fetchDir('/').then(setFileTree);
+                alert(`${type === 'file' ? 'File' : 'Directory'} created at ${path}`);
             } else {
                 const data = await res.json();
                 alert(`Error: ${data.error}`);
@@ -355,7 +399,81 @@ export default function AIPage() {
         }
     };
 
-    const handleClear = () => setMessages([]);
+    const triggerAIAction = (prompt: string) => {
+        setInput(prompt);
+        // We use a small timeout to let state update, or just use a helper
+        setTimeout(() => {
+            inputRef.current?.focus();
+            // Trigger submit manually by creating a fake event or calling logic
+            const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+            handleSubmit(fakeEvent, prompt);
+        }, 50);
+    };
+
+    /* Parser for AI responses */
+    const renderAIMessage = (content: string) => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+
+        // Tags to look for
+        const regex = /<(CODE_CHANGE|CREATE_FILE|CREATE_DIR)(?:\s+path="([^"]+)")?>\n?([\s\S]*?)\n?<\/\1>|(<CREATE_DIR\s+path="([^"]+)"\s*\/>)/g;
+        let match;
+
+        while ((match = regex.exec(content)) !== null) {
+            // Add preceding text
+            if (match.index > lastIndex) {
+                parts.push(<span key={lastIndex}>{content.slice(lastIndex, match.index)}</span>);
+            }
+
+            const tag = match[1] || 'CREATE_DIR';
+            const path = match[2] || match[5];
+            const body = match[3] || '';
+
+            if (tag === 'CODE_CHANGE') {
+                parts.push(
+                    <div key={match.index} className="ai-action-box">
+                        <div className="ai-action-header">
+                            <Wand2 size={14} /> <span>Proposed Code Change</span>
+                        </div>
+                        <pre className="ai-action-preview">{body.length > 100 ? body.slice(0, 100) + '...' : body}</pre>
+                        <button className="ai-apply-btn" onClick={() => applyCodeChange(body)}>
+                            Apply Change
+                        </button>
+                    </div>
+                );
+            } else if (tag === 'CREATE_FILE') {
+                parts.push(
+                    <div key={match.index} className="ai-action-box">
+                        <div className="ai-action-header">
+                            <FilePlus size={14} /> <span>Create File: {path}</span>
+                        </div>
+                        <button className="ai-apply-btn" onClick={() => handleAICreate('file', path, body)}>
+                            Create File
+                        </button>
+                    </div>
+                );
+            } else if (tag === 'CREATE_DIR') {
+                parts.push(
+                    <div key={match.index} className="ai-action-box">
+                        <div className="ai-action-header">
+                            <FolderPlus size={14} /> <span>Create Directory: {path}</span>
+                        </div>
+                        <button className="ai-apply-btn" onClick={() => handleAICreate('dir', path)}>
+                            Create Directory
+                        </button>
+                    </div>
+                );
+            }
+
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < content.length) {
+            parts.push(<span key={lastIndex}>{content.slice(lastIndex)}</span>);
+        }
+
+        return parts;
+    };
 
     return (
         <>
@@ -683,6 +801,59 @@ export default function AIPage() {
                     background: var(--primary);
                     border-radius: 50%;
                 }
+
+                /* ── AI Actions in Chat ── */
+                .ai-action-box {
+                    background: rgba(0,240,255,0.05);
+                    border: 1px solid rgba(0,240,255,0.2);
+                    border-radius: 8px;
+                    margin-top: 0.75rem;
+                    padding: 0.75rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                }
+                .ai-action-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    font-weight: 600;
+                    font-size: 0.75rem;
+                    color: var(--primary);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .ai-action-preview {
+                    background: rgba(0,0,0,0.3);
+                    padding: 0.5rem;
+                    border-radius: 4px;
+                    font-size: 0.75rem;
+                    font-family: var(--font-mono);
+                    color: var(--text-secondary);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: pre;
+                    max-height: 60px;
+                }
+                .ai-apply-btn {
+                    background: var(--primary);
+                    color: black;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    align-self: flex-start;
+                }
+                .ai-apply-btn:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(0,240,255,0.3);
+                }
+                .ai-apply-btn:active {
+                    transform: translateY(0);
+                }
             `}</style>
 
             <div className="ai-layout">
@@ -740,6 +911,19 @@ export default function AIPage() {
                             onClick={() => handleAction('paste', contextMenu.node)}
                         >
                             <Clipboard size={14} /> Paste
+                        </div>
+                        <div className="context-menu-divider" />
+                        <div className="context-menu-item" onClick={() => {
+                            triggerAIAction(`Refactor this file: ${contextMenu.node.path}`);
+                            setContextMenu(null);
+                        }}>
+                            <Wand2 size={14} /> Refactor with AI
+                        </div>
+                        <div className="context-menu-item" onClick={() => {
+                            triggerAIAction(`Explain this file: ${contextMenu.node.path}`);
+                            setContextMenu(null);
+                        }}>
+                            <Bot size={14} /> Explain with AI
                         </div>
                         <div className="context-menu-divider" />
                         <div className="context-menu-item" onClick={() => { setRenamingNode(contextMenu.node); setContextMenu(null); }}>
@@ -851,7 +1035,7 @@ export default function AIPage() {
                                     className={`msg-row ${msg.role === 'user' ? 'user' : ''}`}
                                 >
                                     <div className={`msg-bubble ${msg.role === 'user' ? 'user' : 'bot'}`}>
-                                        {msg.content}
+                                        {msg.role === 'user' ? msg.content : renderAIMessage(msg.content)}
                                     </div>
                                 </motion.div>
                             ))}

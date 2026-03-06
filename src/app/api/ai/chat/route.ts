@@ -9,12 +9,30 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Message is required" }, { status: 400 });
         }
 
-        let fullPrompt = message;
-        if (fileContent && fileName) {
-            fullPrompt = `CONTEXT (File: ${fileName}):\n\n${fileContent}\n\n---\n\nUSER REQUEST:\n${message}`;
-        }
+        const SYSTEM_PROMPT = `You are an AI Coding Assistant integrated into a web IDE.
+Your goal is to help users browse, edit, and manage their filesystem.
 
-        return new Promise((resolve) => {
+GUIDELINES:
+1. When proposing code changes for the active file, wrap the ENTIRE NEW CONTENT in these tags:
+   <CODE_CHANGE>
+   [FILE CONTENT]
+   </CODE_CHANGE>
+2. When proposing to create a new file, use:
+   <CREATE_FILE path="/absolute/path/to/file">
+   [CONTENT]
+   </CREATE_FILE>
+3. When proposing to create a directory, use:
+   <CREATE_DIR path="/absolute/path/to/dir" />
+4. Always provide the full content for <CODE_CHANGE> so it can be applied directly.
+5. Keep descriptions outside the tags brief.`;
+
+        let fullPrompt = `${SYSTEM_PROMPT}\n\n`;
+        if (fileContent && fileName) {
+            fullPrompt += `CONTEXT (Active File: ${fileName}):\n\n${fileContent}\n\n---\n\n`;
+        }
+        fullPrompt += `USER REQUEST:\n${message}`;
+
+        return new Promise<Response>((resolve) => {
             // Call system-installed gemini cli with headless prompt and text format
             // Use '-' following '-p' to read from stdin (assuming gemini CLI supports this pattern)
             // If it doesn't support '-', we can just use prompt with a stdin pipe
