@@ -24,17 +24,27 @@ app.prepare().then(() => {
 
     io.on('connection', (socket) => {
         console.log('Client connected:', socket.id);
+        const { cwd: queryCwd, command } = socket.handshake.query;
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-        const cwd = socket.handshake.query.cwd || process.env.HOME;
+        const cwd = queryCwd || process.env.HOME || os.homedir();
 
-        const ptyProcess = pty.spawn(shell, [], {
+        let spawnCmd = shell;
+        let spawnArgs = [];
+
+        if (command === 'gemini') {
+            spawnCmd = '/usr/local/bin/gemini';
+            // Optional: add any default args for gemini if needed
+        } else if (command) {
+            spawnCmd = command;
+        }
+
+        const ptyProcess = pty.spawn(spawnCmd, spawnArgs, {
             name: 'xterm-color',
             cols: 80,
             rows: 30,
             cwd: cwd,
             env: { ...process.env, TERM: 'xterm-256color' }
         });
-
         socket.on('terminal:input', (data) => {
             try {
                 ptyProcess.write(data);

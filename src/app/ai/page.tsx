@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus, FileJson, Files, FileImage, FileText, Braces, FileTerminal, Terminal as TerminalIcon } from 'lucide-react';
+import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus, FileJson, Files, FileImage, FileText, Braces, FileTerminal, Terminal as TerminalIcon, GitPullRequest, GitBranch, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 
@@ -722,6 +722,9 @@ export default function AIPage() {
                     await handleAICreate('file', path, body);
                 } else if (tag === 'CREATE_DIR') {
                     await handleAICreate('dir', path);
+                } else if (tag === 'GIT_ACTION') {
+                    const action = match[0].match(/action="([^"]+)"/)?.[1];
+                    if (action && path) await handleGitAction(action, path);
                 }
             } catch (err) {
                 console.error(`Failed to auto-execute ${tag}:`, err);
@@ -824,6 +827,24 @@ export default function AIPage() {
             alert(`Error: ${e.message}`);
         }
     };
+    
+    const handleGitAction = async (action: string, path: string) => {
+        try {
+            const res = await fetch('/api/git/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, projectPath: path }),
+            });
+            if (res.ok) {
+                alert(`Git ${action} successful for ${path}`);
+            } else {
+                const data = await res.json();
+                alert(`Git ${action} failed: ${data.error}`);
+            }
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+        }
+    };
 
     const triggerAIAction = (prompt: string) => {
         setInput(prompt);
@@ -901,6 +922,27 @@ export default function AIPage() {
             }
 
             lastIndex = regex.lastIndex;
+        }
+
+        // Second pass for GIT_ACTION (to keep regex simple)
+        const gitRegex = /<GIT_ACTION\s+action="([^"]+)"\s+path="([^"]+)"\s*\/>/g;
+        let gitMatch;
+        while ((gitMatch = gitRegex.exec(content)) !== null) {
+            const action = gitMatch[1];
+            const path = gitMatch[2];
+            parts.push(
+                <div key={`git-${gitMatch.index}`} className="ai-action-box">
+                    <div className="ai-action-header">
+                        <GitBranch size={14} /> <span>Git {action}: {path}</span>
+                        {alwaysAccept && <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.6rem' }}>[Auto-executed]</span>}
+                    </div>
+                    {!alwaysAccept && (
+                        <button className="ai-apply-btn" onClick={() => handleGitAction(action, path)}>
+                            Run Git {action}
+                        </button>
+                    )}
+                </div>
+            );
         }
 
         if (lastIndex < content.length) {
@@ -1689,109 +1731,10 @@ export default function AIPage() {
 
                 {/* ── Chatbot ── */}
                 <section className="ai-chat" style={{ width: chatWidth }}>
-                    <div className="chat-header">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
-                            <button 
-                                className={`icon-button ${isHistoryOpen ? 'active' : ''}`} 
-                                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-                                title="Chat History"
-                                style={{ color: isHistoryOpen ? 'var(--primary)' : 'inherit' }}
-                            >
-                                <Files size={16} />
-                            </button>
-                            <span style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>AI Assistant</span>
-                            <div 
-                                className={`always-accept-badge ${alwaysAccept ? 'active' : ''}`}
-                                onClick={() => setAlwaysAccept(!alwaysAccept)}
-                                title={alwaysAccept ? 'Auto-accepting suggestions' : 'Manual approval required'}
-                            >
-                                {alwaysAccept ? 'Always Accept: ON' : 'Always Accept: OFF'}
-                            </div>
-                        </div>
-                        <div className="chat-header-actions">
-                            <button className="icon-button" onClick={createNewChat} title="New Conversation">
-                                <FilePlus size={16} />
-                            </button>
-                        </div>
-                    </div>
 
-                    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <AnimatePresence>
-                            {isHistoryOpen && (
-                                <motion.div 
-                                    className="history-panel"
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                >
-                                    {conversations.length === 0 ? (
-                                        <div style={{ padding: '2rem', textAlign: 'center', opacity: 0.4, fontSize: '0.8rem' }}>No history yet</div>
-                                    ) : (
-                                        conversations.map(conv => (
-                                            <div 
-                                                key={conv.id} 
-                                                className={`history-item ${activeConversationId === conv.id ? 'active' : ''}`}
-                                                onClick={() => switchConversation(conv.id)}
-                                            >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
-                                                    <FileTerminal size={12} opacity={0.5} />
-                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.title}</span>
-                                                </div>
-                                                <X size={12} className="delete-conv" onClick={(e) => deleteConversation(conv.id, e)} />
-                                            </div>
-                                        ))
-                                    )}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
 
-                        <div className="chat-messages">
-                        {messages.length === 0 && (
-                            <div style={{ textAlign: 'center', marginTop: '4rem', opacity: 0.4 }}>
-                                <Bot size={24} style={{ margin: '0 auto 0.5rem' }} />
-                                <p style={{ fontSize: '0.8rem' }}>Ask anything about the project</p>
-                            </div>
-                        )}
-                            {messages.map((msg, i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ opacity: 0, y: 5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className={`msg-row ${msg.role === 'user' ? 'user' : ''}`}
-                                >
-                                    <div className={`msg-bubble ${msg.role === 'user' ? 'user' : 'bot'}`}>
-                                        {msg.role === 'user' ? msg.content : renderAIMessage(msg.content)}
-                                        {isLoading && i === messages.length - 1 && <span className="blinking-cursor" />}
-                                    </div>
-                                </motion.div>
-                            ))}
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    <div className="chat-input-area">
-                        <form className="chat-input-container" onSubmit={handleSubmit}>
-                        <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '8px', padding: '4px 8px', gap: '4px' }}>
-                            <input
-                                ref={inputRef}
-                                className="chat-input"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                placeholder="Ask AI..."
-                                disabled={isLoading}
-                                style={{ border: 'none', background: 'transparent' }}
-                            />
-                            {isLoading ? (
-                                <button type="button" className="icon-button" onClick={stopResponse} title="Stop Response" style={{ color: 'var(--error)' }}>
-                                    <X size={18} />
-                                </button>
-                            ) : (
-                                <button type="submit" className="icon-button" disabled={!input.trim()}>
-                                    <Send size={18} />
-                                </button>
-                            )}
-                        </div>
-                    </form>
-                    </div>
+                    <div className="chat-messages" style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
+                        <TerminalComponent command="gemini" cwd={currentPath} />
                     </div>
                 </section>
                 {/* ── Path Selection Modal ── */}

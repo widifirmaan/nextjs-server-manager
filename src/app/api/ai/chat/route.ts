@@ -25,8 +25,11 @@ GUIDELINES:
    </CREATE_FILE>
 3. When proposing to create a directory, use:
    <CREATE_DIR path="/absolute/path/to/dir" />
-4. Always provide the full content for <CODE_CHANGE> so it can be applied directly.
-5. Keep descriptions outside the tags brief.`;
+4. When you need to perform a Git operation (pull, fetch, status), use:
+   <GIT_ACTION action="action_name" path="/absolute/path/to/repo" />
+   Supported actions: pull, fetch, status.
+5. Always provide the full content for <CODE_CHANGE> so it can be applied directly.
+6. Keep descriptions outside the tags brief.`;
 
         let fullPrompt = `${SYSTEM_PROMPT}\n\n`;
 
