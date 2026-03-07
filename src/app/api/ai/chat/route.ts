@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
+import fs from 'fs';
 
 export const dynamic = 'force-dynamic'; // Ensure dynamic execution
 
@@ -48,7 +49,16 @@ GUIDELINES:
 
         const stream = new ReadableStream({
             start(controller) {
-                const child = spawn('gemini', ['-p', '-', '-o', 'text'], {
+                const geminiPaths = ['/usr/bin/gemini', '/usr/local/bin/gemini'];
+                let spawnCmd = 'gemini'; // fallback
+                for (const p of geminiPaths) {
+                    if (fs.existsSync(p)) {
+                        spawnCmd = p;
+                        break;
+                    }
+                }
+
+                const child = spawn(spawnCmd, ['-p', '-', '-o', 'text'], {
                     shell: true 
                 });
 

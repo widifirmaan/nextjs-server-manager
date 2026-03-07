@@ -3,6 +3,7 @@ const next = require('next');
 const { Server } = require('socket.io');
 const pty = require('node-pty');
 const os = require('os');
+const fs = require('fs');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -32,8 +33,14 @@ app.prepare().then(() => {
         let spawnArgs = [];
 
         if (command === 'gemini') {
-            spawnCmd = '/usr/local/bin/gemini';
-            // Optional: add any default args for gemini if needed
+            const geminiPaths = ['/usr/bin/gemini', '/usr/local/bin/gemini'];
+            spawnCmd = 'gemini'; // fallback
+            for (const p of geminiPaths) {
+                if (fs.existsSync(p)) {
+                    spawnCmd = p;
+                    break;
+                }
+            }
         } else if (command) {
             spawnCmd = command;
         }
