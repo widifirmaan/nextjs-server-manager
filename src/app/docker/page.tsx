@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Play, Square, RotateCw, AlertTriangle, Loader2, Trash2, Download, Layers, Box } from 'lucide-react';
+import { Play, Square, RotateCw, AlertTriangle, Loader2, Trash2, Download, Layers, Box, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 // import { toast } from 'sonner';
 
@@ -66,6 +66,38 @@ export default function DockerPage() {
         }
     }, [activeTab]);
 
+    const handleOpenInAI = async (container: any) => {
+        const projectDir = container.Labels?.['com.docker.compose.project.working_dir'];
+        if (!projectDir) {
+            alert('This container does not appear to be part of a Docker Compose project with a known working directory.');
+            return;
+        }
+
+        setProcessing(`${container.Id}-open-ai`);
+        try {
+            // Fetch current session first to avoid losing data
+            const sessionRes = await fetch('/api/ai/session');
+            const currentSession = await sessionRes.json();
+            
+            // Update only the currentPath
+            await fetch('/api/ai/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    ...currentSession,
+                    currentPath: projectDir 
+                }),
+            });
+            
+            // Redirect to AI page
+            window.location.href = '/ai';
+        } catch (e) {
+            alert('Failed to open project in AI IDE');
+        } finally {
+            setProcessing(null);
+        }
+    };
+
     const handleContainerAction = async (id: string, action: string) => {
         setProcessing(`${id}-${action}`);
         try {
@@ -130,6 +162,29 @@ export default function DockerPage() {
         }
     };
 
+    const handleRunImage = async (image: string) => {
+        const name = prompt('Enter container name (optional):');
+        setProcessing(`run-${image}`);
+        try {
+            const res = await fetch('/api/docker', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image, name: name || undefined }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`Error: ${data.error}`);
+            } else {
+                setActiveTab('containers');
+                fetchContainers();
+            }
+        } catch (e) {
+            alert('Failed to run image');
+        } finally {
+            setProcessing(null);
+        }
+    };
+
     const formatBytes = (bytes: number) => {
         if (bytes === 0) return '0 B';
         const k = 1024;
@@ -167,6 +222,12 @@ export default function DockerPage() {
                         Images
                     </button>
                 </div>
+                {activeTab === 'images' && (
+                    <button className="btn btn-sm btn-ghost" onClick={fetchImages} disabled={imagesLoading}>
+                        <RotateCw size={14} className={clsx(imagesLoading && 'animate-spin')} />
+                        Refresh
+                    </button>
+                )}
             </div>
 
             {error && (
@@ -231,6 +292,16 @@ export default function DockerPage() {
                                                 >
                                                     {processing === `${c.Id}-restart` ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
                                                 </button>
+                                                {c.Labels?.['com.docker.compose.project.working_dir'] && (
+                                                    <button
+                                                        className="btn btn-ghost p-2 text-primary"
+                                                        title="Open Project in AI IDE"
+                                                        disabled={!!processing}
+                                                        onClick={() => handleOpenInAI(c)}
+                                                    >
+                                                        {processing === `${c.Id}-open-ai` ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -302,21 +373,35 @@ export default function DockerPage() {
                                                     )}
                                                 </td>
                                                 <td className="text-sm font-mono">{formatBytes(img.Size)}</td>
-                                                <td className="text-sm text-muted">{formatTime(img.Created)}</td>
-                                                <td>
-                                                    <button
-                                                        className="btn btn-danger p-2"
-                                                        title="Delete Image"
-                                                        disabled={!!processing}
-                                                        onClick={() => handleDeleteImage(img.Id)}
-                                                    >
-                                                        {processing === `delete-${img.Id}` ? (
-                                                            <Loader2 size={14} className="animate-spin" />
-                                                        ) : (
-                                                            <Trash2 size={14} />
-                                                        )}
-                                                    </button>
-                                                </td>
+                                                 <td className="text-sm text-muted">{formatTime(img.Created)}</td>
+                                                 <td>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            className="btn btn-primary p-2"
+                                                            title="Run Container"
+                                                            disabled={!!processing}
+                                                            onClick={() => handleRunImage(img.RepoTags?.[0] || img.Id)}
+                                                        >
+                                                            {processing === `run-${img.RepoTags?.[0] || img.Id}` ? (
+                                                                <Loader2 size={14} className="animate-spin" />
+                                                            ) : (
+                                                                <Play size={14} />
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-danger p-2"
+                                                            title="Delete Image"
+                                                            disabled={!!processing}
+                                                            onClick={() => handleDeleteImage(img.Id)}
+                                                        >
+                                                            {processing === `delete-${img.Id}` ? (
+                                                                <Loader2 size={14} className="animate-spin" />
+                                                            ) : (
+                                                                <Trash2 size={14} />
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                 </td>
                                             </tr>
                                         ))}
                                     </tbody>

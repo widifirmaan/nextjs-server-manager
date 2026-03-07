@@ -344,7 +344,7 @@ export default function AIPage() {
         return () => {
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         };
-    }, [tabs, activeTabId, currentPath, isSessionLoaded]);
+    }, [tabs, activeTabId, currentPath, isSessionLoaded, conversations, activeConversationId, terminalHeight]);
 
     useEffect(() => {
         if (currentPath) {
@@ -575,7 +575,8 @@ export default function AIPage() {
         setIsLoading(true);
         
         let currentId = activeConversationId;
-        let isNewChat = false;
+        const newMessages: { role: 'user' | 'assistant', content: string }[] = [...messages, { role: 'user', content: userMsg }];
+        const messagesWithAssistantPlaceholder: { role: 'user' | 'assistant', content: string }[] = [...newMessages, { role: 'assistant', content: '' }];
 
         // If no active chat, create one
         if (!currentId) {
@@ -583,20 +584,20 @@ export default function AIPage() {
             const newConv: Conversation = {
                 id: newId,
                 title: userMsg.slice(0, 30) + (userMsg.length > 30 ? '...' : ''),
-                messages: [],
+                messages: messagesWithAssistantPlaceholder,
                 timestamp: Date.now()
             };
             setConversations(prev => [newConv, ...prev]);
             setActiveConversationId(newId);
             currentId = newId;
-            isNewChat = true;
+        } else {
+            // Sync with existing conversation state immediately
+            setConversations(prev => prev.map(c => 
+                c.id === currentId ? { ...c, messages: messagesWithAssistantPlaceholder } : c
+            ));
         }
 
-        const newMessages: { role: 'user' | 'assistant', content: string }[] = [...messages, { role: 'user', content: userMsg }];
-        setMessages(newMessages);
-
-        // Add a placeholder for the assistant's response
-        setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+        setMessages(messagesWithAssistantPlaceholder);
 
         const fileContent = activeTab ? activeTab.content : undefined;
         const fileName = activeTab ? activeTab.name : undefined;
@@ -1220,7 +1221,7 @@ export default function AIPage() {
                 /* History */
                 .history-panel {
                     position: absolute;
-                    top: 40px;
+                    top: 0;
                     left: 0;
                     right: 0;
                     background: #1e1e1e;

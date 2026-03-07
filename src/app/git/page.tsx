@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X, Box, Coffee, Trash2 } from 'lucide-react';
+import { GitBranch, GitCommit, Download, RefreshCw, AlertTriangle, Loader2, GitPullRequest, Clock, Plus, X, Box, Coffee, Trash2, Layers } from 'lucide-react';
 import clsx from 'clsx';
 // import { toast } from 'sonner';
 
@@ -29,6 +29,7 @@ export default function GitPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [processing, setProcessing] = useState<string | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
 
     // Clone Modal State
     const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
@@ -51,6 +52,30 @@ export default function GitPage() {
         } catch (e) {
             setError('Failed to connect to API');
         } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRescan = async () => {
+        setIsScanning(true);
+        setLoading(true);
+        try {
+            const res = await fetch('/api/git', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'rescan' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setProjects(data);
+                alert('System scan completed! All projects indexed.');
+            } else {
+                alert(`Scan failed: ${data.error}`);
+            }
+        } catch (e) {
+            alert('Failed to trigger system scan');
+        } finally {
+            setIsScanning(false);
             setLoading(false);
         }
     };
@@ -166,12 +191,21 @@ export default function GitPage() {
                         Fetch All
                     </button>
                     <button
+                        className="btn btn-sm btn-ghost border border-white/10"
+                        onClick={handleRescan}
+                        disabled={loading || isScanning}
+                        title="Scan System for Git Projects"
+                    >
+                        <Layers size={18} className={clsx(isScanning && "animate-spin mr-2", !isScanning && "mr-2")} />
+                        {isScanning ? 'Scanning...' : 'Rescan System'}
+                    </button>
+                    <button
                         className="btn btn-ghost btn-sm"
                         onClick={fetchProjects}
                         disabled={loading}
                         title="Refresh List"
                     >
-                        <RefreshCw size={18} className={clsx(loading && "animate-spin")} />
+                        <RefreshCw size={18} className={clsx(loading && !isScanning && "animate-spin")} />
                     </button>
                 </div>
             </div>
@@ -210,7 +244,7 @@ export default function GitPage() {
                                         value={cloneFolder}
                                         onChange={(e) => setCloneFolder(e.target.value)}
                                     />
-                                    <p className="text-xs text-muted mt-1">Will be cloned into /root/{cloneFolder || 'repo-name'}</p>
+                                    <p className="text-xs text-muted mt-1">Will be cloned into primary path: {cloneFolder || 'repo-name'}</p>
                                 </div>
                             </div>
 
@@ -417,8 +451,15 @@ export default function GitPage() {
                     {projects.length === 0 && !loading && !error && (
                         <div className="p-12 text-center text-muted border border-white/10 rounded-lg">
                             <GitPullRequest size={48} className="mx-auto mb-4 opacity-50" />
-                            <h3 className="text-lg font-medium">No Git Projects Found</h3>
-                            <p>No git repositories were found in /root/</p>
+                            <h3 className="text-lg font-medium">No Git Projects Indexed</h3>
+                            <p className="mb-4 text-sm opacity-70">No git repositories were found in your mapped directories.</p>
+                            <button 
+                                className="btn btn-primary btn-sm mx-auto"
+                                onClick={handleRescan}
+                            >
+                                <Layers size={16} className="mr-2" />
+                                Start Initial System Scan
+                            </button>
                         </div>
                     )}
                 </div>

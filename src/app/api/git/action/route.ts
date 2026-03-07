@@ -4,7 +4,12 @@ import path from 'path';
 import { exec } from 'child_process';
 import util from 'util';
 import fs from 'fs/promises';
+import { readDb, writeDb } from '@/lib/db';
+import { updateProjectInDb } from '@/lib/git';
+import os from 'os';
+
 const execAsync = util.promisify(exec);
+const ROOT_DIRS = ['/root', os.homedir()].filter(Boolean);
 
 export const dynamic = 'force-dynamic';
 
@@ -13,26 +18,35 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { projectPath, action } = body;
 
-        if (!projectPath || !projectPath.startsWith('/root/') || projectPath.includes('..')) {
+        const isPathAllowed = ROOT_DIRS.some(dir => projectPath && projectPath.startsWith(dir)) && !projectPath.includes('..');
+
+        if (!isPathAllowed) {
             return NextResponse.json({ error: 'Invalid project path' }, { status: 400 });
         }
 
         const git = simpleGit(projectPath);
-
         let result;
 
         switch (action) {
             case 'pull':
-                result = await git.pull();
+                // User requested standard pull to be "force" (hard reset to origin)
+                await git.fetch();
+                const pullStatus = await git.status();
+                const pullBranch = pullStatus.current;
+                let pullTarget = '';
+                try {
+                    pullTarget = (await git.revparse(['--abbrev-ref', '@{u}'])).trim();
+                } catch (e) {
+                    pullTarget = `origin/${pullBranch}`;
+                }
+                
+                await git.reset(['--hard', pullTarget]);
+                await git.clean('f', ['-d']);
+                result = { message: `Pulled and Reset to ${pullTarget} successfully` };
                 break;
+
             case 'fetch':
                 result = await git.fetch();
-                break;
-            case 'log':
-                result = await git.log({ maxCount: 10 });
-                break;
-            case 'status':
-                result = await git.status();
                 break;
 
             case 'force-pull':
@@ -42,68 +56,59 @@ export async function POST(req: Request) {
 
                 let resetTarget = '';
                 try {
-                    // Try to get configured upstream (e.g. origin/main)
                     resetTarget = (await git.revparse(['--abbrev-ref', '@{u}'])).trim();
                 } catch (e) {
-                    // No upstream configured. Try guessing origin/<branch>
                     resetTarget = `origin/${currentBranch}`;
                 }
 
-                try {
-                    await git.reset(['--hard', resetTarget]);
-                    // ALSO clean untracked files/directories (-fd)
-                    await git.clean('f', ['-d']);
-                    result = { message: `Hard Reset to ${resetTarget} successful` };
-                } catch (e: any) {
-                    if (e.message.includes('ambiguous argument') || e.message.includes('unknown revision')) {
-                        throw new Error(`Remote branch '${resetTarget}' does not exist. Cannot force pull local-only branch.`);
-                    }
-                    throw e;
-                }
+                await git.reset(['--hard', resetTarget]);
+                await git.clean('f', ['-d']);
+                result = { message: `Hard Reset to ${resetTarget} successful` };
                 break;
+
             case 'docker-rebuild':
-                // We assume compose for "Rebuild Docker" usually means restarting the stack
-                // Note: We need to change CWD to project path to run compose
                 try {
-                    // Try to detect compose file first
                     const { stdout, stderr } = await execAsync('docker compose down && docker compose up -d --build --force-recreate', {
                         cwd: projectPath
                     });
                     result = { stdout, stderr, message: 'Docker rebuild triggered successfully' };
                 } catch (e: any) {
-                    // Fallback or error
                     throw new Error(`Docker build failed: ${e.message}`);
                 }
                 break;
+
             case 'springboot-rebuild':
                 try {
-                    // 1. Build the JAR file
                     await execAsync('mvn clean package -DskipTests', { cwd: projectPath });
-
-                    // 2. If Docker Compose exists, rebuild the container to pick up the new JAR
                     try {
                         await fs.access(path.join(projectPath, 'docker-compose.yml'));
-                        // Compose exists, restart it
                         const { stdout, stderr } = await execAsync('docker compose down && docker compose up -d --build --force-recreate', {
                             cwd: projectPath
                         });
                         result = { stdout, stderr, message: 'Spring Boot built & Docker restarted' };
                     } catch {
-                        // No compose, just return build success
                         result = { message: 'Spring Boot JAR built successfully (mvn clean package)' };
                     }
                 } catch (e: any) {
                     throw new Error(`Spring Boot build failed: ${e.message}`);
                 }
                 break;
+
             case 'delete':
-                // Double safety check is already done at top of function
                 await fs.rm(projectPath, { recursive: true, force: true });
-                result = { message: 'Repository deleted successfully' };
-                break;
+                const db = await readDb();
+                if (db.gitProjects) {
+                    const updatedProjects = db.gitProjects.filter((p: any) => p.path !== projectPath);
+                    await writeDb({ gitProjects: updatedProjects });
+                }
+                return NextResponse.json({ success: true, data: { message: 'Repository deleted successfully' } });
+
             default:
                 return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }
+
+        // Always update project status in DB after any git action
+        await updateProjectInDb(projectPath);
 
         return NextResponse.json({ success: true, data: result });
     } catch (err: any) {

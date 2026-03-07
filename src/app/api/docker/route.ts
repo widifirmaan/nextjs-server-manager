@@ -16,3 +16,21 @@ export async function GET() {
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
+
+export async function POST(req: Request) {
+    try {
+        const { image, name } = await req.json();
+        if (!image) return NextResponse.json({ error: 'Image is required' }, { status: 400 });
+
+        const container = await docker.createContainer({
+            Image: image,
+            name: name || `container-${Math.random().toString(36).substring(7)}`,
+            Tty: true,
+        });
+
+        await container.start();
+        return NextResponse.json({ success: true, id: container.id });
+    } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+}
