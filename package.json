@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "clsx": "^2.1.1",
     "dockerode": "^4.0.9",
     "framer-motion": "^12.35.0",

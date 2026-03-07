@@ -25,12 +25,13 @@ app.prepare().then(() => {
     io.on('connection', (socket) => {
         console.log('Client connected:', socket.id);
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+        const cwd = socket.handshake.query.cwd || process.env.HOME;
 
         const ptyProcess = pty.spawn(shell, [], {
             name: 'xterm-color',
             cols: 80,
             rows: 30,
-            cwd: process.env.HOME,
+            cwd: cwd,
             env: { ...process.env, TERM: 'xterm-256color' }
         });
 

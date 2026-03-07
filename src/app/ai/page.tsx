@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus, FileJson, Files, FileImage, FileText, Braces, FileTerminal } from 'lucide-react';
+import { Bot, User, Send, Loader2, Trash2, ChevronRight, ChevronDown, Folder, File, FolderOpen, PanelLeftClose, PanelLeft, X, Save, FileCode, Copy, Scissors, Clipboard, Edit, Wand2, FilePlus, FolderPlus, FileJson, Files, FileImage, FileText, Braces, FileTerminal, Terminal as TerminalIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
+
+const TerminalComponent = dynamic(() => import('@/components/Terminal'), { ssr: false });
+const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 /* ─── Types ─── */
 interface FileEntry {
@@ -24,6 +28,13 @@ interface EditorTab {
     path: string;
     content: string;
     isModified: boolean;
+}
+
+interface Conversation {
+    id: string;
+    title: string;
+    messages: { role: 'user' | 'assistant'; content: string }[];
+    timestamp: number;
 }
 
 const getFileIcon = (fileName: string) => {
@@ -140,9 +151,53 @@ function FileTreeItem({ node, depth, onToggle, onSelect, activePath, onContextMe
     );
 }
 
+const getFileLanguage = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+        case 'js':
+        case 'jsx':
+            return 'javascript';
+        case 'ts':
+        case 'tsx':
+            return 'typescript';
+        case 'json':
+            return 'json';
+        case 'css':
+            return 'css';
+        case 'scss':
+            return 'scss';
+        case 'html':
+            return 'html';
+        case 'md':
+            return 'markdown';
+        case 'py':
+            return 'python';
+        case 'go':
+            return 'go';
+        case 'rs':
+            return 'rust';
+        case 'java':
+            return 'java';
+        case 'cpp':
+        case 'c':
+        case 'h':
+        case 'hpp':
+            return 'cpp';
+        case 'sh':
+            return 'shell';
+        case 'yaml':
+        case 'yml':
+            return 'yaml';
+        default:
+            return 'plaintext';
+    }
+};
+
 /* ─── Main Page ─── */
 export default function AIPage() {
     const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [fileTree, setFileTree] = useState<TreeNode[]>([]);
@@ -151,7 +206,8 @@ export default function AIPage() {
     const [activeTabId, setActiveTabId] = useState<string | null>(null);
     const [explorerWidth, setExplorerWidth] = useState(260);
     const [chatWidth, setChatWidth] = useState(320);
-    const [isResizing, setIsResizing] = useState<null | 'explorer' | 'chat'>(null);
+    const [terminalHeight, setTerminalHeight] = useState(200);
+    const [isResizing, setIsResizing] = useState<null | 'explorer' | 'chat' | 'terminal'>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
     const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut'; node: TreeNode } | null>(null);
     const [renamingNode, setRenamingNode] = useState<TreeNode | null>(null);
@@ -161,11 +217,13 @@ export default function AIPage() {
     const [modalInput, setModalInput] = useState('');
     const [modalSuggestions, setModalSuggestions] = useState<string[]>([]);
     const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const editorRef = useRef<HTMLTextAreaElement>(null);
-    const gutterRef = useRef<HTMLDivElement>(null);
+    const editorRef = useRef<any>(null); // Monaco editor instance
+    const abortControllerRef = useRef<AbortController | null>(null);
     const [isSessionLoaded, setIsSessionLoaded] = useState(false);
+    const [alwaysAccept, setAlwaysAccept] = useState(true);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const activeTab = tabs.find(t => t.id === activeTabId) || null;
@@ -177,6 +235,9 @@ export default function AIPage() {
                 setExplorerWidth(Math.max(150, Math.min(500, e.clientX)));
             } else if (isResizing === 'chat') {
                 setChatWidth(Math.max(200, Math.min(600, window.innerWidth - e.clientX)));
+            } else if (isResizing === 'terminal') {
+                const newHeight = window.innerHeight - e.clientY;
+                setTerminalHeight(Math.max(100, Math.min(600, newHeight)));
             }
         };
         const handleMouseUp = () => setIsResizing(null);
@@ -233,6 +294,17 @@ export default function AIPage() {
                     if (data.currentPath) setCurrentPath(data.currentPath);
                     if (data.tabs && Array.isArray(data.tabs)) setTabs(data.tabs);
                     if (data.activeTabId) setActiveTabId(data.activeTabId);
+                    if (data.terminalHeight) setTerminalHeight(data.terminalHeight);
+                    if (data.conversations) setConversations(data.conversations);
+                    if (data.activeConversationId) {
+                        setActiveConversationId(data.activeConversationId);
+                        const active = data.conversations.find((c: any) => c.id === data.activeConversationId);
+                        if (active) setMessages(active.messages);
+                    } else if (data.conversations && data.conversations.length > 0) {
+                        // Fallback to first if no active ID
+                        setActiveConversationId(data.conversations[0].id);
+                        setMessages(data.conversations[0].messages);
+                    }
                 }
             } catch (e) {
                 console.error("Failed to load session:", e);
@@ -255,7 +327,14 @@ export default function AIPage() {
                 await fetch('/api/ai/session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tabs, activeTabId, currentPath }),
+                    body: JSON.stringify({ 
+                        tabs, 
+                        activeTabId, 
+                        currentPath, 
+                        terminalHeight,
+                        conversations,
+                        activeConversationId
+                    }),
                 });
             } catch (e) {
                 console.error("Failed to save session:", e);
@@ -304,9 +383,7 @@ export default function AIPage() {
     }, [fetchDir]);
 
     const handleEditorScroll = () => {
-        if (editorRef.current && gutterRef.current) {
-            gutterRef.current.scrollTop = editorRef.current.scrollTop;
-        }
+        // This function is no longer needed with Monaco Editor
     };
 
     useEffect(() => {
@@ -463,9 +540,13 @@ export default function AIPage() {
         }
     };
 
-    const updateActiveTabContent = (content: string) => {
-        if (!activeTabId) return;
-        setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, content, isModified: true } : t));
+    const handleEditorChange = (value: string | undefined) => {
+        if (!activeTabId || value === undefined) return;
+        setTabs((prev) =>
+            prev.map((t) =>
+                t.id === activeTabId ? { ...t, content: value || '', isModified: true } : t
+            )
+        );
     };
 
     const saveActiveTab = async () => {
@@ -492,6 +573,25 @@ export default function AIPage() {
 
         if (!overrideMsg) setInput('');
         setIsLoading(true);
+        
+        let currentId = activeConversationId;
+        let isNewChat = false;
+
+        // If no active chat, create one
+        if (!currentId) {
+            const newId = Math.random().toString(36).substr(2, 9);
+            const newConv: Conversation = {
+                id: newId,
+                title: userMsg.slice(0, 30) + (userMsg.length > 30 ? '...' : ''),
+                messages: [],
+                timestamp: Date.now()
+            };
+            setConversations(prev => [newConv, ...prev]);
+            setActiveConversationId(newId);
+            currentId = newId;
+            isNewChat = true;
+        }
+
         const newMessages: { role: 'user' | 'assistant', content: string }[] = [...messages, { role: 'user', content: userMsg }];
         setMessages(newMessages);
 
@@ -517,6 +617,9 @@ export default function AIPage() {
         const projectStructure = getProjectStructureText(fileTree);
 
         try {
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+
             const res = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -527,6 +630,7 @@ export default function AIPage() {
                     currentPath,
                     projectStructure
                 }),
+                signal: controller.signal
             });
 
             if (!res.body) {
@@ -537,10 +641,12 @@ export default function AIPage() {
             const decoder = new TextDecoder();
             let done = false;
 
+            let accumulated = '';
             while (!done) {
                 const { value, done: readerDone } = await reader.read();
                 done = readerDone;
                 const chunk = decoder.decode(value, { stream: true });
+                accumulated += chunk;
                 
                 setMessages(prev => 
                     prev.map((msg, i) => 
@@ -549,15 +655,84 @@ export default function AIPage() {
                 );
             }
 
-        } catch (error: any) {
-            setMessages(prev => 
-                prev.map((msg, i) => 
-                    i === prev.length - 1 ? { ...msg, content: `Error: ${error.message}` } : msg
-                )
-            );
+            const finalMessages = [...newMessages, { role: 'assistant' as const, content: accumulated }];
+            
+            // Sync with conversations state
+            setConversations(prev => prev.map(c => 
+                c.id === currentId ? { ...c, messages: finalMessages } : c
+            ));
+
+            if (alwaysAccept) {
+                executeAIActions(accumulated);
+            }
+
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                console.log('Fetch aborted');
+            } else {
+                console.error('AI Error:', e);
+                setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error.' }]);
+            }
         } finally {
             setIsLoading(false);
+            abortControllerRef.current = null;
             inputRef.current?.focus();
+        }
+    };
+
+    const createNewChat = () => {
+        setActiveConversationId(null);
+        setMessages([]);
+        setIsHistoryOpen(false);
+        inputRef.current?.focus();
+    };
+
+    const switchConversation = (id: string) => {
+        const conv = conversations.find(c => c.id === id);
+        if (conv) {
+            setActiveConversationId(id);
+            setMessages(conv.messages);
+            setIsHistoryOpen(false);
+        }
+    };
+
+    const deleteConversation = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setConversations(prev => prev.filter(c => c.id !== id));
+        if (activeConversationId === id) {
+            setActiveConversationId(null);
+            setMessages([]);
+        }
+    };
+
+    const executeAIActions = async (content: string) => {
+        const regex = /<(CODE_CHANGE|CREATE_FILE|CREATE_DIR)(?:\s+path="([^"]+)")?>\n?([\s\S]*?)\n?<\/\1>|(<CREATE_DIR\s+path="([^"]+)"\s*\/>)/g;
+        let match;
+        
+        while ((match = regex.exec(content)) !== null) {
+            const tag = match[1] || 'CREATE_DIR';
+            const path = match[2] || match[5];
+            const body = match[3] || '';
+
+            try {
+                if (tag === 'CODE_CHANGE') {
+                    await applyCodeChange(body);
+                } else if (tag === 'CREATE_FILE') {
+                    await handleAICreate('file', path, body);
+                } else if (tag === 'CREATE_DIR') {
+                    await handleAICreate('dir', path);
+                }
+            } catch (err) {
+                console.error(`Failed to auto-execute ${tag}:`, err);
+            }
+        }
+    };
+
+    const stopResponse = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            setIsLoading(false);
+            abortControllerRef.current = null;
         }
     };
 
@@ -684,11 +859,14 @@ export default function AIPage() {
                     <div key={match.index} className="ai-action-box">
                         <div className="ai-action-header">
                             <Wand2 size={14} /> <span>Proposed Code Change</span>
+                            {alwaysAccept && <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.6rem' }}>[Auto-executed]</span>}
                         </div>
                         <pre className="ai-action-preview">{body.length > 100 ? body.slice(0, 100) + '...' : body}</pre>
-                        <button className="ai-apply-btn" onClick={() => applyCodeChange(body)}>
-                            Apply Change
-                        </button>
+                        {!alwaysAccept && (
+                            <button className="ai-apply-btn" onClick={() => applyCodeChange(body)}>
+                                Apply Change
+                            </button>
+                        )}
                     </div>
                 );
             } else if (tag === 'CREATE_FILE') {
@@ -696,10 +874,13 @@ export default function AIPage() {
                     <div key={match.index} className="ai-action-box">
                         <div className="ai-action-header">
                             <FilePlus size={14} /> <span>Create File: {path}</span>
+                            {alwaysAccept && <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.6rem' }}>[Auto-executed]</span>}
                         </div>
-                        <button className="ai-apply-btn" onClick={() => handleAICreate('file', path, body)}>
-                            Create File
-                        </button>
+                        {!alwaysAccept && (
+                            <button className="ai-apply-btn" onClick={() => handleAICreate('file', path, body)}>
+                                Create File
+                            </button>
+                        )}
                     </div>
                 );
             } else if (tag === 'CREATE_DIR') {
@@ -707,10 +888,13 @@ export default function AIPage() {
                     <div key={match.index} className="ai-action-box">
                         <div className="ai-action-header">
                             <FolderPlus size={14} /> <span>Create Directory: {path}</span>
+                            {alwaysAccept && <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.6rem' }}>[Auto-executed]</span>}
                         </div>
-                        <button className="ai-apply-btn" onClick={() => handleAICreate('dir', path)}>
-                            Create Directory
-                        </button>
+                        {!alwaysAccept && (
+                            <button className="ai-apply-btn" onClick={() => handleAICreate('dir', path)}>
+                                Create Directory
+                            </button>
+                        )}
                     </div>
                 );
             }
@@ -937,42 +1121,10 @@ export default function AIPage() {
                 
                 .editor-container {
                     flex: 1;
+                    position: relative;
+                    overflow: hidden;
                     display: flex;
-                    position: relative;
-                    overflow: hidden;
-                }
-                .line-numbers {
-                    width: 45px;
-                    background: #0d0d0d;
-                    color: #5a5a5a;
-                    font-family: var(--font-mono);
-                    font-size: 0.85rem;
-                    line-height: 1.6;
-                    text-align: right;
-                    padding: 1.5rem 0.75rem;
-                    user-select: none;
-                    overflow: hidden;
-                    border-right: 1px solid rgba(255,255,255,0.05);
-                }
-                .code-editor-wrapper {
-                    flex: 1;
-                    position: relative;
-                    overflow: hidden;
-                }
-                .code-editor {
-                    width: 100%;
-                    height: 100%;
-                    background: transparent;
-                    color: #d4d4d4;
-                    font-family: var(--font-mono);
-                    font-size: 0.85rem;
-                    line-height: 1.6;
-                    border: none;
-                    resize: none;
-                    outline: none;
-                    padding: 1.5rem;
-                    white-space: pre;
-                    overflow: auto;
+                    flex-direction: column;
                 }
                 .editor-placeholder {
                     flex: 1;
@@ -1007,34 +1159,49 @@ export default function AIPage() {
                     flex-direction: column;
                     gap: 1rem;
                 }
+                
+                /* ── Terminal Panel ── */
+                .terminal-panel {
+                    background: #0a0a0a;
+                    border-top: 1px solid var(--border);
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    z-index: 10;
+                }
+                .terminal-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 4px 12px;
+                    background: #111;
+                    border-bottom: 1px solid var(--border);
+                    color: var(--text-secondary);
+                    font-size: 0.75rem;
+                }
+                .resizer-h {
+                    height: 4px;
+                    cursor: row-resize;
+                    background: transparent;
+                    transition: background 0.2s;
+                    z-index: 20;
+                    margin-top: -2px;
+                }
+                .resizer-h:hover, .resizer-h.active {
+                    background: var(--primary);
+                }                
                 .chat-input-area {
                     padding: 1rem;
                     border-top: 1px solid var(--border);
                 }
-                .chat-form {
-                    display: flex;
-                    gap: 0.5rem;
-                    background: var(--surface);
-                    border: 1px solid var(--border);
-                    border-radius: 8px;
-                    padding: 0.375rem;
-                }
-                .chat-form input {
+                .chat-input {
                     flex: 1;
+                    height: 32px;
+                    border: none;
                     background: transparent;
-                    border: none;
-                    outline: none;
-                    color: var(--text-primary);
-                    padding: 0.25rem 0.5rem;
+                    color: white;
                     font-size: 0.85rem;
-                }
-                .send-btn {
-                    background: var(--primary);
-                    color: black;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                    cursor: pointer;
+                    outline: none;
                 }
 
                 /* Messages */
@@ -1050,6 +1217,56 @@ export default function AIPage() {
                 .msg-bubble.bot { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
                 .msg-bubble.user { background: var(--primary); color: black; border-bottom-right-radius: 2px; }
 
+                /* History */
+                .history-panel {
+                    position: absolute;
+                    top: 40px;
+                    left: 0;
+                    right: 0;
+                    background: #1e1e1e;
+                    border-bottom: 1px solid var(--border);
+                    z-index: 50;
+                    max-height: 300px;
+                    overflow-y: auto;
+                    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+                }
+                .history-item {
+                    padding: 0.6rem 1rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    cursor: pointer;
+                    border-left: 3px solid transparent;
+                    font-size: 0.8rem;
+                    color: #aaa;
+                    transition: all 0.2s;
+                }
+                .history-item:hover {
+                    background: rgba(255,255,255,0.03);
+                    color: white;
+                }
+                .history-item.active {
+                    background: rgba(0,240,255,0.05);
+                    border-left-color: var(--primary);
+                    color: white;
+                }
+                .history-item .delete-conv {
+                    opacity: 0;
+                    transition: opacity 0.2s;
+                }
+                .history-item:hover .delete-conv {
+                    opacity: 0.6;
+                }
+                .history-item .delete-conv:hover {
+                    opacity: 1;
+                    color: var(--error);
+                }
+
+                .chat-header-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
                 .modified-dot {
                     width: 6px;
                     height: 6px;
@@ -1184,6 +1401,25 @@ export default function AIPage() {
                 .ai-apply-btn:active {
                     transform: translateY(0);
                 }
+                .always-accept-badge {
+                    font-size: 0.65rem;
+                    padding: 2px 6px;
+                    border-radius: 99px;
+                    background: rgba(255,255,255,0.05);
+                    color: #888;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    user-select: none;
+                    border: 1px solid transparent;
+                }
+                .always-accept-badge.active {
+                    background: rgba(0,240,255,0.1);
+                    color: var(--primary);
+                    border: 1px solid rgba(0,240,255,0.2);
+                }
+                .always-accept-badge:hover {
+                    background: rgba(255,255,255,0.1);
+                }
             `}</style>
 
             <div className="ai-layout">
@@ -1290,52 +1526,66 @@ export default function AIPage() {
                 {/* ── Editor ── */}
                 <main className="ai-editor">
                     <div className="tab-bar">
-                        {!showPanel && (
-                            <button className="icon-button" style={{ margin: '0 0.5rem' }} onClick={() => setShowPanel(true)}>
-                                <PanelLeft size={16} />
-                            </button>
-                        )}
-                        {tabs.map(tab => (
-                            <div 
-                                key={tab.id} 
-                                className={`tab ${activeTabId === tab.id ? 'active' : ''}`}
-                                onClick={() => setActiveTabId(tab.id)}
-                            >
-                                <FileCode size={14} />
-                                <span>{tab.name}</span>
-                                {tab.isModified && <div className="modified-dot" />}
-                                <X size={12} className="tab-close" onClick={(e) => closeTab(tab.id, e)} />
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="editor-container">
-                        {activeTab ? (
-                            <>
-                                <div className="line-numbers" ref={gutterRef}>
-                                    {activeTab.content.split('\n').map((_, i) => (
-                                        <div key={i}>{i + 1}</div>
-                                    ))}
+                            {!showPanel && (
+                                <button className="icon-button" style={{ margin: '0 0.5rem' }} onClick={() => setShowPanel(true)}>
+                                    <PanelLeft size={16} />
+                                </button>
+                            )}
+                            {tabs.map((tab) => (
+                                <div 
+                                    key={tab.id} 
+                                    className={`tab ${tab.id === activeTabId ? 'active' : ''}`}
+                                    onClick={() => setActiveTabId(tab.id)}
+                                >
+                                    <span style={{ opacity: 0.7 }}>{getFileIcon(tab.name)}</span>
+                                    <span>{tab.name}</span>
+                                    {tab.isModified && <div className="modified-dot" />}
+                                    <button 
+                                        className="tab-close" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            closeTab(tab.id, e);
+                                        }}
+                                    >
+                                        <X size={14} />
+                                    </button>
                                 </div>
-                                <div className="code-editor-wrapper">
-                                    <textarea
-                                        ref={editorRef}
-                                        className="code-editor"
+                            ))}
+                        </div>
+                        <div className="editor-container" style={{ background: '#1e1e1e' }}>
+                            {activeTab ? (
+                                <>
+                                    <Editor
+                                        height="100%"
+                                        language={getFileLanguage(activeTab.name)}
                                         value={activeTab.content}
-                                        onScroll={handleEditorScroll}
-                                        onChange={(e) => updateActiveTabContent(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                                                e.preventDefault();
-                                                saveActiveTab();
+                                        theme="vs-dark"
+                                        onChange={handleEditorChange}
+                                        onMount={(editor) => {
+                                            editorRef.current = editor;
+                                        }}
+                                        options={{
+                                            minimap: { enabled: true },
+                                            fontSize: 13,
+                                            lineNumbers: 'on',
+                                            roundedSelection: false,
+                                            scrollBeyondLastLine: false,
+                                            readOnly: false,
+                                            automaticLayout: true,
+                                            padding: { top: 15, bottom: 15 },
+                                            fontFamily: 'var(--font-mono)',
+                                            scrollbar: {
+                                                vertical: 'visible',
+                                                horizontal: 'visible',
+                                                verticalScrollbarSize: 10,
+                                                horizontalScrollbarSize: 10
                                             }
                                         }}
-                                        spellCheck={false}
                                     />
-                                    <div style={{ position: 'absolute', bottom: 10, right: 10 }}>
+                                    <div style={{ position: 'absolute', bottom: 10, right: 30, zIndex: 10 }}>
                                         <button 
                                             className="btn btn-primary" 
-                                            style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+                                            style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px' }}
                                             onClick={saveActiveTab}
                                             disabled={!activeTab.isModified}
                                         >
@@ -1343,13 +1593,12 @@ export default function AIPage() {
                                             {activeTab.isModified ? 'Save' : 'Saved'}
                                         </button>
                                     </div>
-                                </div>
-                            </>
-                        ) : (
+                                </>
+                            ) : (
                             <div className="editor-placeholder" style={{ alignItems: 'flex-start', padding: '10%', opacity: 1, backgroundColor: '#111' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
                                     <Bot size={48} color="var(--primary)" />
-                                    <h2 style={{ fontSize: '2rem', fontWeight: 300, color: 'var(--text-primary)', margin: 0 }}>AI Assistant Studio</h2>
+                                    <h2 style={{ fontSize: '2rem', fontWeight: 300, color: 'var(--text-primary)', margin: 0 }}>WAI Code Editor</h2>
                                 </div>
                                 
                                 <div style={{ display: 'flex', gap: '4rem', width: '100%' }}>
@@ -1407,6 +1656,29 @@ export default function AIPage() {
                             </div>
                         )}
                     </div>
+
+                    <div 
+                        className={`resizer-h ${isResizing === 'terminal' ? 'active' : ''}`} 
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            setIsResizing('terminal');
+                        }} 
+                    />
+                    
+                    <div className="terminal-panel" style={{ height: terminalHeight }}>
+                        <div className="terminal-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <TerminalIcon size={14} />
+                                <span>Terminal</span>
+                            </div>
+                            <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>
+                                {currentPath}
+                            </div>
+                        </div>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <TerminalComponent cwd={currentPath} />
+                        </div>
+                    </div>
                 </main>
 
                 <div 
@@ -1417,16 +1689,62 @@ export default function AIPage() {
                 {/* ── Chatbot ── */}
                 <section className="ai-chat" style={{ width: chatWidth }}>
                     <div className="chat-header">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Bot size={18} color="var(--primary)" />
-                            <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>AI Assistant</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
+                            <button 
+                                className={`icon-button ${isHistoryOpen ? 'active' : ''}`} 
+                                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                                title="Chat History"
+                                style={{ color: isHistoryOpen ? 'var(--primary)' : 'inherit' }}
+                            >
+                                <Files size={16} />
+                            </button>
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>AI Assistant</span>
+                            <div 
+                                className={`always-accept-badge ${alwaysAccept ? 'active' : ''}`}
+                                onClick={() => setAlwaysAccept(!alwaysAccept)}
+                                title={alwaysAccept ? 'Auto-accepting suggestions' : 'Manual approval required'}
+                            >
+                                {alwaysAccept ? 'Always Accept: ON' : 'Always Accept: OFF'}
+                            </div>
                         </div>
-                        <button className="icon-button" onClick={handleClear} title="Clear Chat">
-                            <Trash2 size={16} />
-                        </button>
+                        <div className="chat-header-actions">
+                            <button className="icon-button" onClick={createNewChat} title="New Conversation">
+                                <FilePlus size={16} />
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="chat-messages">
+                    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <AnimatePresence>
+                            {isHistoryOpen && (
+                                <motion.div 
+                                    className="history-panel"
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                >
+                                    {conversations.length === 0 ? (
+                                        <div style={{ padding: '2rem', textAlign: 'center', opacity: 0.4, fontSize: '0.8rem' }}>No history yet</div>
+                                    ) : (
+                                        conversations.map(conv => (
+                                            <div 
+                                                key={conv.id} 
+                                                className={`history-item ${activeConversationId === conv.id ? 'active' : ''}`}
+                                                onClick={() => switchConversation(conv.id)}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                                                    <FileTerminal size={12} opacity={0.5} />
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.title}</span>
+                                                </div>
+                                                <X size={12} className="delete-conv" onClick={(e) => deleteConversation(conv.id, e)} />
+                                            </div>
+                                        ))
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        <div className="chat-messages">
                         {messages.length === 0 && (
                             <div style={{ textAlign: 'center', marginTop: '4rem', opacity: 0.4 }}>
                                 <Bot size={24} style={{ margin: '0 auto 0.5rem' }} />
@@ -1450,19 +1768,29 @@ export default function AIPage() {
                     </div>
 
                     <div className="chat-input-area">
-                        <form onSubmit={handleSubmit} className="chat-form">
+                        <form className="chat-input-container" onSubmit={handleSubmit}>
+                        <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '8px', padding: '4px 8px', gap: '4px' }}>
                             <input
                                 ref={inputRef}
-                                type="text"
-                                placeholder={activeTab ? `Chat about ${activeTab.name}...` : "Type a message..."}
+                                className="chat-input"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
+                                placeholder="Ask AI..."
                                 disabled={isLoading}
+                                style={{ border: 'none', background: 'transparent' }}
                             />
-                            <button type="submit" className="send-btn" disabled={!input.trim() || isLoading}>
-                                <Send size={14} />
-                            </button>
-                        </form>
+                            {isLoading ? (
+                                <button type="button" className="icon-button" onClick={stopResponse} title="Stop Response" style={{ color: 'var(--error)' }}>
+                                    <X size={18} />
+                                </button>
+                            ) : (
+                                <button type="submit" className="icon-button" disabled={!input.trim()}>
+                                    <Send size={18} />
+                                </button>
+                            )}
+                        </div>
+                    </form>
+                    </div>
                     </div>
                 </section>
                 {/* ── Path Selection Modal ── */}
