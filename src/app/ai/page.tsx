@@ -205,7 +205,7 @@ export default function AIPage() {
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState<string | null>(null);
     const [explorerWidth, setExplorerWidth] = useState(260);
-    const [chatWidth, setChatWidth] = useState(320);
+    const [chatWidth, setChatWidth] = useState(700);
     const [terminalHeight, setTerminalHeight] = useState(200);
     const [isResizing, setIsResizing] = useState<null | 'explorer' | 'chat' | 'terminal'>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
@@ -234,7 +234,7 @@ export default function AIPage() {
             if (isResizing === 'explorer') {
                 setExplorerWidth(Math.max(150, Math.min(500, e.clientX)));
             } else if (isResizing === 'chat') {
-                setChatWidth(Math.max(200, Math.min(600, window.innerWidth - e.clientX)));
+                setChatWidth(Math.max(300, Math.min(window.innerWidth * 0.8, window.innerWidth - e.clientX)));
             } else if (isResizing === 'terminal') {
                 const newHeight = window.innerHeight - e.clientY;
                 setTerminalHeight(Math.max(100, Math.min(600, newHeight)));

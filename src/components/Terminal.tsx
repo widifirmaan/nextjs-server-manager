@@ -85,11 +85,6 @@ export default function TerminalComponent({ cwd, command }: { cwd?: string, comm
             });
             socketRef.current = socket;
 
-            socket.on('connect', () => {
-                term.write('\r\n\x1b[1;36mTERMINAL CONNECTED\x1b[0m\r\n');
-                requestAnimationFrame(safeFit);
-            });
-
             socket.on('connect_error', (err) => {
                 term.write(`\r\n\x1b[1;31mCONNECTION ERROR: ${err.message}\x1b[0m\r\n`);
             });

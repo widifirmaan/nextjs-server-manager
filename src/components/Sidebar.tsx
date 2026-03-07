@@ -51,9 +51,21 @@ export default function Sidebar() {
         <>
             {/* Mobile Header */}
             <div className="mobile-header">
-                <h1 className="text-xl neon-text font-bold" style={{ letterSpacing: '1px' }}>
-                    SERVER<span style={{ color: 'var(--primary)' }}>MGR</span>
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <h1 className="text-xl neon-text font-bold" style={{ letterSpacing: '1px' }}>
+                        SERVER<span style={{ color: 'var(--primary)' }}>MGR</span>
+                    </h1>
+                    <motion.button
+                        whileHover={{ scale: 1.2 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleLogout}
+                        className="text-muted hover:text-error transition-colors flex items-center justify-center p-0 bg-transparent border-none outline-none"
+                        style={{ background: 'none', border: 'none', padding: 0, outline: 'none', boxShadow: 'none' }}
+                        title="Logout"
+                    >
+                        <LogOut size={16} />
+                    </motion.button>
+                </div>
                 <button
                     onClick={() => setIsMobileOpen(true)}
                     className="p-2 text-text-primary hover:text-primary transition-colors"
@@ -84,15 +96,22 @@ export default function Sidebar() {
                 </button>
 
                 <div className="mb-8 px-2 mt-8 md:mt-0">
-                    <h1 className="text-xl neon-text font-bold desktop-only" style={{ letterSpacing: '1px' }}>
-                        SERVER<span style={{ color: 'var(--primary)' }}>MGR</span>
-                    </h1>
-                    <p className="text-sm text-muted mt-1 desktop-only">v1.0.0 Alpha by <a href="https://widifirmaan.web.id">W</a></p>
-
-                    {/* Mobile version of title inside sidebar (optional, but good for context) */}
-                    <div className="md:hidden">
-                        <p className="text-sm text-muted"></p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h1 className="text-xl neon-text font-bold desktop-only" style={{ letterSpacing: '1px' }}>
+                            SERVER<span style={{ color: 'var(--primary)' }}>MGR</span>
+                        </h1>
+                        <motion.button
+                            whileHover={{ scale: 1.2 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={handleLogout}
+                            className="text-muted hover:text-error transition-colors desktop-only flex items-center justify-center p-0 bg-transparent border-none outline-none"
+                            style={{ background: 'none', border: 'none', padding: 0, outline: 'none', boxShadow: 'none' }}
+                            title="Logout"
+                        >
+                            <LogOut size={18} />
+                        </motion.button>
                     </div>
+                    <p className="text-sm text-muted mt-1 desktop-only">v1.0.0 Alpha by <a href="https://widifirmaan.web.id" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">W</a></p>
                 </div>
 
                 <nav className="flex flex-col gap-2">
@@ -116,14 +135,6 @@ export default function Sidebar() {
                         );
                     })}
 
-                    <button
-                        onClick={handleLogout}
-                        className="nav-item w-full hover:text-error transition-colors mt-2"
-                        style={{ marginTop: 'auto' }}
-                    >
-                        <LogOut size={20} />
-                        <span>Logout</span>
-                    </button>
                 </nav>
 
                 <div className="mt-4 p-4 glass-panel text-xs text-muted flex items-center justify-between">
