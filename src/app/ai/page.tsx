@@ -728,11 +728,16 @@ export default function AIPage() {
     return (
         <>
             <style>{`
+                .content {
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    height: 100vh !important;
+                }
                 .ai-layout {
                     display: flex;
-                    height: calc(100vh - 4rem);
+                    height: 100vh;
                     overflow: hidden;
-                    background: #0a0a0a;
+                    background: #111; /* Match the surface color of the Sidebar for a seamless transition */
                 }
 
                 /* ── Explorer Panel ── */

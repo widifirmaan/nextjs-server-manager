@@ -1,7 +1,29 @@
 {
   "session": {
-    "tabs": [],
-    "activeTabId": null,
+    "tabs": [
+      {
+        "id": "uimpz7q01",
+        "name": "server.js",
+        "path": "/home/widifirmaan/Github/nextjs-server-manager/server.js",
+        "content": "const { createServer } = require('http');\nconst next = require('next');\nconst { Server } = require('socket.io');\nconst pty = require('node-pty');\nconst os = require('os');\n\nconst dev = process.env.NODE_ENV !== 'production';\nconst hostname = '0.0.0.0';\nconst port = process.env.PORT || 8001;\n// when using middleware `hostname` and `port` must be provided below\nconst app = next({ dev, hostname, port });\nconst handle = app.getRequestHandler();\n\napp.prepare().then(() => {\n    const httpServer = createServer(handle);\n\n    const io = new Server(httpServer, {\n        path: '/socket.io',\n        cors: {\n            origin: \"*\", // Allow connection from Cloudflare Tunnel domain\n            methods: [\"GET\", \"POST\"]\n        }\n    });\n\n    io.on('connection', (socket) => {\n        console.log('Client connected:', socket.id);\n        const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';\n\n        const ptyProcess = pty.spawn(shell, [], {\n            name: 'xterm-color',\n            cols: 80,\n            rows: 30,\n            cwd: process.env.HOME,\n            env: { ...process.env, TERM: 'xterm-256color' }\n        });\n\n        socket.on('terminal:input', (data) => {\n            try {\n                ptyProcess.write(data);\n            } catch (e) {\n                // Process might be dead\n            }\n        });\n\n        socket.on('terminal:resize', (size) => {\n            if (size && size.cols && size.rows) {\n                try {\n                    ptyProcess.resize(size.cols, size.rows);\n                } catch (err) {\n                    console.error('Resize error:', err);\n                }\n            }\n        });\n\n        ptyProcess.onData((data) => {\n            socket.emit('terminal:output', data);\n        });\n\n        socket.on('disconnect', () => {\n            console.log('Client disconnected');\n            try {\n                ptyProcess.kill();\n            } catch (e) { }\n        });\n    });\n\n    httpServer.listen(port, () => {\n        console.log(`> Ready on http://${hostname}:${port}`);\n    });\n});\n",
+        "isModified": false
+      },
+      {
+        "id": "mgrmi2fwo",
+        "name": "tsconfig.json",
+        "path": "/home/widifirmaan/Github/nextjs-server-manager/tsconfig.json",
+        "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2017\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"react-jsx\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\"./src/*\"]\n    }\n  },\n  \"include\": [\n    \"next-env.d.ts\",\n    \"**/*.ts\",\n    \"**/*.tsx\",\n    \".next/types/**/*.ts\",\n    \".next/dev/types/**/*.ts\",\n    \"**/*.mts\"\n  ],\n  \"exclude\": [\"node_modules\"]\n}\n",
+        "isModified": false
+      },
+      {
+        "id": "9d4hacqu0",
+        "name": "package.json",
+        "path": "/home/widifirmaan/Github/nextjs-server-manager/package.json",
+        "content": "{\n  \"name\": \"server-manager\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"node server.js\",\n    \"build\": \"next build\",\n    \"start\": \"NODE_ENV=production node server.js\",\n    \"lint\": \"eslint\"\n  },\n  \"dependencies\": {\n    \"clsx\": \"^2.1.1\",\n    \"dockerode\": \"^4.0.9\",\n    \"framer-motion\": \"^12.35.0\",\n    \"js-yaml\": \"^4.1.1\",\n    \"lucide-react\": \"^0.562.0\",\n    \"next\": \"16.1.1\",\n    \"node-pty\": \"^1.1.0\",\n    \"react\": \"19.2.3\",\n    \"react-dom\": \"19.2.3\",\n    \"simple-git\": \"^3.30.0\",\n    \"socket.io\": \"^4.8.3\",\n    \"socket.io-client\": \"^4.8.3\",\n    \"tailwind-merge\": \"^3.4.0\",\n    \"xterm\": \"^5.3.0\",\n    \"xterm-addon-fit\": \"^0.8.0\"\n  },\n  \"devDependencies\": {\n    \"@types/dockerode\": \"^3.3.47\",\n    \"@types/js-yaml\": \"^4.0.9\",\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^19\",\n    \"@types/react-dom\": \"^19\",\n    \"cross-env\": \"^10.1.0\",\n    \"dotenv\": \"^17.2.3\",\n    \"eslint\": \"^9\",\n    \"eslint-config-next\": \"16.1.1\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5\"\n  }\n}\n",
+        "isModified": false
+      }
+    ],
+    "activeTabId": "mgrmi2fwo",
     "currentPath": "/home/widifirmaan/Github/nextjs-server-manager/"
   }
 }
