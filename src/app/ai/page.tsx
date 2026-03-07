@@ -156,10 +156,17 @@ export default function AIPage() {
     const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut'; node: TreeNode } | null>(null);
     const [renamingNode, setRenamingNode] = useState<TreeNode | null>(null);
     const [newName, setNewName] = useState('');
+    const [currentPath, setCurrentPath] = useState<string>('');
+    const [modalType, setModalType] = useState<'open' | 'create' | null>(null);
+    const [modalInput, setModalInput] = useState('');
+    const [modalSuggestions, setModalSuggestions] = useState<string[]>([]);
+    const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const editorRef = useRef<HTMLTextAreaElement>(null);
     const gutterRef = useRef<HTMLDivElement>(null);
+    const [isSessionLoaded, setIsSessionLoaded] = useState(false);
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const activeTab = tabs.find(t => t.id === activeTabId) || null;
 
@@ -216,9 +223,57 @@ export default function AIPage() {
         }
     }, []);
 
+    // Load session from DB on mount
     useEffect(() => {
-        fetchDir('/').then(setFileTree);
-    }, [fetchDir]);
+        const loadSession = async () => {
+            try {
+                const res = await fetch('/api/ai/session');
+                const data = await res.json();
+                if (data && !data.error) {
+                    if (data.currentPath) setCurrentPath(data.currentPath);
+                    if (data.tabs && Array.isArray(data.tabs)) setTabs(data.tabs);
+                    if (data.activeTabId) setActiveTabId(data.activeTabId);
+                }
+            } catch (e) {
+                console.error("Failed to load session:", e);
+                setCurrentPath('/home');
+            } finally {
+                setIsSessionLoaded(true);
+            }
+        };
+        loadSession();
+    }, []);
+
+    // Save session to DB whenever it changes (debounced)
+    useEffect(() => {
+        if (!isSessionLoaded) return;
+
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                await fetch('/api/ai/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tabs, activeTabId, currentPath }),
+                });
+            } catch (e) {
+                console.error("Failed to save session:", e);
+            }
+        }, 1000); // 1s debounce
+
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, [tabs, activeTabId, currentPath, isSessionLoaded]);
+
+    useEffect(() => {
+        if (currentPath) {
+            fetchDir(currentPath).then(setFileTree);
+        } else {
+            setFileTree([]);
+        }
+    }, [fetchDir, currentPath]);
 
     /* toggle folder */
     const toggleFolder = useCallback(async (target: TreeNode) => {
@@ -251,6 +306,124 @@ export default function AIPage() {
     const handleEditorScroll = () => {
         if (editorRef.current && gutterRef.current) {
             gutterRef.current.scrollTop = editorRef.current.scrollTop;
+        }
+    };
+
+    useEffect(() => {
+        if (!modalType) return;
+        
+        let isCancelled = false;
+        const fetchSuggestions = async () => {
+            if (!modalInput.startsWith('/')) {
+                setModalSuggestions([]);
+                return;
+            }
+
+            const lastSlash = modalInput.lastIndexOf('/');
+            const dir = modalInput.substring(0, lastSlash) || '/';
+            const search = modalInput.substring(lastSlash + 1).toLowerCase();
+
+            try {
+                const res = await fetch(`/api/files/list?path=${encodeURIComponent(dir)}`);
+                if (!res.ok || isCancelled) {
+                    if (!isCancelled) setModalSuggestions([]);
+                    return;
+                }
+                const data = await res.json();
+                const directories = (data.files || [])
+                    .filter((f: any) => f.isDirectory)
+                    .map((f: any) => f.name)
+                    .filter((name: string) => name.toLowerCase().startsWith(search))
+                    .sort();
+                
+                if (!isCancelled) {
+                    setModalSuggestions(directories);
+                    setActiveSuggestionIndex(0);
+                }
+            } catch {
+                if (!isCancelled) setModalSuggestions([]);
+            }
+        };
+
+        const timeout = setTimeout(fetchSuggestions, 150);
+        return () => {
+            isCancelled = true;
+            clearTimeout(timeout);
+        };
+    }, [modalInput, modalType]);
+
+    const openModal = (type: 'open' | 'create') => {
+        setModalType(type);
+        setModalInput(currentPath || '/home');
+        setModalSuggestions([]);
+        setActiveSuggestionIndex(0);
+    };
+
+    const handleOpenFolder = () => openModal('open');
+    const handleCreateProject = () => openModal('create');
+
+    const submitModal = async () => {
+        if (!modalInput) return;
+        
+        if (modalType === 'open') {
+            setCurrentPath(modalInput);
+            setTabs([]);
+            setActiveTabId(null);
+            setModalType(null);
+        } else if (modalType === 'create') {
+            try {
+                const res = await fetch('/api/files/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create-dir', path: modalInput }),
+                });
+                if (res.ok) {
+                    setCurrentPath(modalInput);
+                    setTabs([]);
+                    setActiveTabId(null);
+                    setModalType(null);
+                } else {
+                    const data = await res.json();
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (e: any) {
+                alert(`Error: ${e.message}`);
+            }
+        }
+    };
+
+    const handleModalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveSuggestionIndex(prev => Math.min(prev + 1, Math.max(0, modalSuggestions.length - 1)));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveSuggestionIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            if (modalSuggestions.length > 0 && modalSuggestions[activeSuggestionIndex]) {
+                const lastSlash = modalInput.lastIndexOf('/');
+                const dir = modalInput.substring(0, lastSlash) || '/';
+                const newPath = (dir === '/' ? '/' : dir + '/') + modalSuggestions[activeSuggestionIndex] + '/';
+                setModalInput(newPath);
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (modalSuggestions.length > 0 && modalSuggestions[activeSuggestionIndex]) {
+                const search = modalInput.substring(modalInput.lastIndexOf('/') + 1).toLowerCase();
+                const suggestion = modalSuggestions[activeSuggestionIndex].toLowerCase();
+                if (suggestion !== search && !modalInput.endsWith('/')) {
+                    const lastSlash = modalInput.lastIndexOf('/');
+                    const dir = modalInput.substring(0, lastSlash) || '/';
+                    const newPath = (dir === '/' ? '/' : dir + '/') + modalSuggestions[activeSuggestionIndex] + '/';
+                    setModalInput(newPath);
+                    return;
+                }
+            }
+            submitModal();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setModalType(null);
         }
     };
 
@@ -328,6 +501,21 @@ export default function AIPage() {
         const fileContent = activeTab ? activeTab.content : undefined;
         const fileName = activeTab ? activeTab.name : undefined;
 
+        // Generate project structure context
+        const getProjectStructureText = (nodes: TreeNode[], depth = 0): string => {
+            return nodes.map(node => {
+                const indent = '  '.repeat(depth);
+                const prefix = node.isDirectory ? '📁 ' : '📄 ';
+                let line = `${indent}${prefix}${node.name}`;
+                if (node.isDirectory && node.children) {
+                    line += '\n' + getProjectStructureText(node.children, depth + 1);
+                }
+                return line;
+            }).join('\n');
+        };
+
+        const projectStructure = getProjectStructureText(fileTree);
+
         try {
             const res = await fetch('/api/ai/chat', {
                 method: 'POST',
@@ -335,7 +523,9 @@ export default function AIPage() {
                 body: JSON.stringify({
                     message: userMsg,
                     fileContent,
-                    fileName
+                    fileName,
+                    currentPath,
+                    projectStructure
                 }),
             });
 
@@ -409,7 +599,7 @@ export default function AIPage() {
 
             if (res.ok) {
                 // Refresh parent or entire tree
-                fetchDir('/').then(setFileTree);
+                fetchDir(currentPath).then(setFileTree);
                 if (action === 'rename') setRenamingNode(null);
                 if (action === 'paste') setClipboard(null);
                 return true;
@@ -448,7 +638,7 @@ export default function AIPage() {
                         body: JSON.stringify({ path, content }),
                     });
                 }
-                fetchDir('/').then(setFileTree);
+                fetchDir(currentPath).then(setFileTree);
                 alert(`${type === 'file' ? 'File' : 'Directory'} created at ${path}`);
             } else {
                 const data = await res.json();
@@ -875,6 +1065,68 @@ export default function AIPage() {
                     margin-left: 4px;
                 }
 
+                /* ── Path Modal ── */
+                .path-modal-overlay {
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.6);
+                    z-index: 9999;
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: center;
+                    padding-top: 15vh;
+                    backdrop-filter: blur(2px);
+                }
+                .path-modal {
+                    background: #1e1e1e;
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    width: 600px;
+                    max-width: 90vw;
+                    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .path-modal-input-wrapper {
+                    display: flex;
+                    align-items: center;
+                    padding: 8px 12px;
+                    border-bottom: 1px solid var(--border);
+                    background: #252526;
+                }
+                .path-modal-input {
+                    flex: 1;
+                    background: transparent;
+                    border: none;
+                    outline: none;
+                    color: white;
+                    font-family: var(--font-mono);
+                    font-size: 0.9rem;
+                    padding: 4px 8px;
+                }
+                .path-modal-suggestions {
+                    max-height: 300px;
+                    overflow-y: auto;
+                }
+                .path-modal-suggestion-item {
+                    padding: 8px 16px;
+                    font-family: var(--font-mono);
+                    font-size: 0.85rem;
+                    color: #d4d4d4;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .path-modal-suggestion-item.active {
+                    background: var(--primary);
+                    color: black;
+                }
+                .path-modal-suggestion-item:hover:not(.active) {
+                    background: rgba(255,255,255,0.05);
+                }
+
                 /* ── AI Actions in Chat ── */
                 .ai-action-box {
                     background: rgba(0,240,255,0.05);
@@ -936,26 +1188,48 @@ export default function AIPage() {
                     style={{ width: showPanel ? explorerWidth : 0 }}
                 >
                     <div className="panel-header">
-                        <h3>Explorer</h3>
-                        <button className="icon-button" onClick={() => setShowPanel(false)}>
-                            <PanelLeftClose size={16} />
-                        </button>
+                        <h3 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }} title={currentPath}>
+                            {currentPath ? currentPath.split('/').pop()?.toUpperCase() || 'EXPLORER' : 'EXPLORER'}
+                        </h3>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                            <button className="icon-button" onClick={handleCreateProject} title="New Project">
+                                <FolderPlus size={14} />
+                            </button>
+                            <button className="icon-button" onClick={handleOpenFolder} title="Open Folder">
+                                <FolderOpen size={14} />
+                            </button>
+                            <button className="icon-button" onClick={() => setShowPanel(false)} title="Close Panel">
+                                <PanelLeftClose size={14} />
+                            </button>
+                        </div>
                     </div>
                     <div className="ai-file-tree">
-                        {fileTree.map((node) => (
-                            <FileTreeItem
-                                key={node.path}
-                                node={node}
-                                depth={0}
-                                onToggle={toggleFolder}
-                                onSelect={openFile}
-                                onContextMenu={handleContextMenu}
-                                renamingNode={renamingNode}
-                                setRenamingNode={setRenamingNode}
-                                handleAction={handleAction}
-                                activePath={activeTab?.path || ''}
-                            />
-                        ))}
+                        {!currentPath ? (
+                            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                <p style={{ marginBottom: '1rem' }}>You have not yet opened a folder.</p>
+                                <button className="ai-apply-btn" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'center', display: 'flex' }} onClick={handleOpenFolder}>Open Folder</button>
+                                <button className="ai-apply-btn" style={{ width: '100%', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', justifyContent: 'center', display: 'flex' }} onClick={handleCreateProject}>Create Project</button>
+                            </div>
+                        ) : fileTree.length === 0 ? (
+                            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                Folder is empty
+                            </div>
+                        ) : (
+                            fileTree.map((node) => (
+                                <FileTreeItem
+                                    key={node.path}
+                                    node={node}
+                                    depth={0}
+                                    onToggle={toggleFolder}
+                                    onSelect={openFile}
+                                    onContextMenu={handleContextMenu}
+                                    renamingNode={renamingNode}
+                                    setRenamingNode={setRenamingNode}
+                                    handleAction={handleAction}
+                                    activePath={activeTab?.path || ''}
+                                />
+                            ))
+                        )}
                     </div>
                 </aside>
 
@@ -1067,9 +1341,64 @@ export default function AIPage() {
                                 </div>
                             </>
                         ) : (
-                            <div className="editor-placeholder">
-                                <Bot size={48} />
-                                <p>Select a file to edit</p>
+                            <div className="editor-placeholder" style={{ alignItems: 'flex-start', padding: '10%', opacity: 1, backgroundColor: '#111' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                                    <Bot size={48} color="var(--primary)" />
+                                    <h2 style={{ fontSize: '2rem', fontWeight: 300, color: 'var(--text-primary)', margin: 0 }}>AI Assistant Studio</h2>
+                                </div>
+                                
+                                <div style={{ display: 'flex', gap: '4rem', width: '100%' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>Start</h3>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                            <li>
+                                                <button 
+                                                    onClick={() => triggerAIAction('Create a new file')} 
+                                                    style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', padding: '0.5rem 0' }}
+                                                >
+                                                    <FilePlus size={18} /> New File...
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button 
+                                                    onClick={handleOpenFolder} 
+                                                    style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', padding: '0.5rem 0' }}
+                                                >
+                                                    <FolderOpen size={18} /> Open Folder...
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button 
+                                                    onClick={handleCreateProject} 
+                                                    style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', padding: '0.5rem 0' }}
+                                                >
+                                                    <FolderPlus size={18} /> Create New Project...
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>AI Actions</h3>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                            <li>
+                                                <button 
+                                                    onClick={() => triggerAIAction('Explain the codebase architecture')} 
+                                                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', padding: '0.5rem 0' }}
+                                                >
+                                                    <Bot size={18} /> Explain Codebase
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button 
+                                                    onClick={() => triggerAIAction('Help me refactor a component')} 
+                                                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', padding: '0.5rem 0' }}
+                                                >
+                                                    <Wand2 size={18} /> Refactor Code
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -1131,6 +1460,54 @@ export default function AIPage() {
                         </form>
                     </div>
                 </section>
+                {/* ── Path Selection Modal ── */}
+                {modalType && (
+                    <div className="path-modal-overlay" onMouseDown={() => setModalType(null)}>
+                        <div className="path-modal" onMouseDown={e => e.stopPropagation()}>
+                            <div className="path-modal-input-wrapper">
+                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginRight: '8px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                    {modalType === 'open' ? 'Open Folder' : 'Create Project'}
+                                </span>
+                                <input
+                                    autoFocus
+                                    className="path-modal-input"
+                                    value={modalInput}
+                                    onChange={e => setModalInput(e.target.value)}
+                                    // Make sure hitting enter handles the action
+                                    onKeyDown={handleModalKeyDown}
+                                    placeholder={modalType === 'open' ? "Type path to open e.g. /home/user/my-project" : "Type path for new project e.g. /home/new-app"}
+                                />
+                                <button className="ai-apply-btn" style={{ marginLeft: '8px', padding: '4px 12px' }} onClick={submitModal}>
+                                    {modalType === 'open' ? 'Open' : 'Create'}
+                                </button>
+                            </div>
+                            <div className="path-modal-suggestions">
+                                {modalSuggestions.map((sug, i) => (
+                                    <div 
+                                        key={sug} 
+                                        className={`path-modal-suggestion-item ${i === activeSuggestionIndex ? 'active' : ''}`}
+                                        onClick={() => {
+                                            const lastSlash = modalInput.lastIndexOf('/');
+                                            const dir = modalInput.substring(0, lastSlash) || '/';
+                                            const newPath = (dir === '/' ? '/' : dir + '/') + sug + '/';
+                                            setModalInput(newPath);
+                                            // Focus input after auto-complete click
+                                            document.querySelector<HTMLInputElement>('.path-modal-input')?.focus();
+                                        }}
+                                    >
+                                        <Folder color={i === activeSuggestionIndex ? 'black' : 'var(--text-secondary)'} size={14} /> 
+                                        {sug}
+                                    </div>
+                                ))}
+                                {modalSuggestions.length === 0 && modalInput && modalInput.endsWith('/') && (
+                                    <div style={{ padding: '8px 16px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                        No matching directories found
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

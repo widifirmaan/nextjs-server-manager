@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'; // Ensure dynamic execution
 
 export async function POST(req: NextRequest) {
     try {
-        const { message, fileContent, fileName } = await req.json();
+        const { message, fileContent, fileName, currentPath, projectStructure } = await req.json();
         
         if (!message) {
             return new Response("Message is required", { status: 400 });
@@ -29,8 +29,17 @@ GUIDELINES:
 5. Keep descriptions outside the tags brief.`;
 
         let fullPrompt = `${SYSTEM_PROMPT}\n\n`;
+
+        if (currentPath) {
+            fullPrompt += `CURRENT PROJECT PATH: ${currentPath}\n\n`;
+        }
+
+        if (projectStructure) {
+            fullPrompt += `PROJECT STRUCTURE:\n${projectStructure}\n\n`;
+        }
+
         if (fileContent && fileName) {
-            fullPrompt += `CONTEXT (Active File: ${fileName}):\n\n${fileContent}\n\n---\n\n`;
+            fullPrompt += `ACTIVE FILE CONTENT (Name: ${fileName}):\n\n${fileContent}\n\n---\n\n`;
         }
         fullPrompt += `USER REQUEST:\n${message}`;
 
