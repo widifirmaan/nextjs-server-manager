@@ -45,8 +45,6 @@ export default function TerminalComponent({ cwd, command }: { cwd?: string, comm
                 fontFamily: '"Fira Code", monospace',
                 fontSize: 13,
                 allowProposedApi: true,
-                copySelection: true,
-                rightClickSelectsWord: true,
             });
             termRef.current = term;
 
